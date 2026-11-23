@@ -94,6 +94,11 @@ func (s *service) appendChunk(w http.ResponseWriter, r *http.Request) error {
 	if size <= 0 || size > chunkLimit || size > f.Size-offset || !validHex(hash, 64) {
 		return fail(400, "Invalid chunk length or digest")
 	}
+	release, e := s.reserve(uint64(size))
+	if e != nil {
+		return e
+	}
+	defer release()
 	path := s.object(r.PathValue("room"), id)
 	if e = os.MkdirAll(filepath.Dir(path), 0700); e != nil {
 		return diskErr(e)
@@ -203,11 +208,12 @@ func (s *service) cancel(w http.ResponseWriter, r *http.Request) error {
 		return fail(409, "File already published")
 	}
 	path := s.object(r.PathValue("room"), id)
-	if e = os.Remove(path); e != nil && !os.IsNotExist(e) {
-		return e
-	}
 	e = s.change(r, true, func(b *bolt.Bucket, _ room, _ member) error { return sub(b, "files").Delete([]byte(id)) })
 	if e != nil {
+		return e
+	}
+	// If unlinking fails, room expiration retries cleanup of the whole spool.
+	if e = os.Remove(path); e != nil && !os.IsNotExist(e) {
 		return e
 	}
 	return reply(w, true)

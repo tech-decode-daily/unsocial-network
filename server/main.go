@@ -26,6 +26,8 @@ func run() error {
 	public := flag.String("public-url", "", "HTTPS origin of a reverse proxy; upstream binds to loopback")
 	desktop := flag.Bool("desktop", false, "stop when parent stdin closes")
 	ttl := flag.Duration("ttl", 24*time.Hour, "room lifetime from creation")
+	minFree := flag.Uint64("reserve-bytes", 64<<20, "minimum free spool space")
+	attempts := flag.Int("auth-rate", 90, "create and join attempts per source IP per minute")
 	advertise := flag.String("advertise", "", "LAN IPv4 address to include in invitations")
 	flag.Parse()
 	admin := os.Getenv("UNSOCIAL_ADMIN_TOKEN")
@@ -40,6 +42,11 @@ func run() error {
 		return e
 	}
 	defer s.db.Close()
+	if *attempts < 1 {
+		return errors.New("auth-rate must be positive")
+	}
+	s.minFree = *minFree
+	s.attempts = *attempts
 	if e = s.sweep(); e != nil {
 		return e
 	}

@@ -57,14 +57,16 @@ type rate struct {
 	until time.Time
 }
 type service struct {
-	db         *bolt.DB
-	dir, admin string
-	ttl        time.Duration
-	mu         sync.Mutex
-	online     map[string]map[string]int
-	signals    map[string]chan struct{}
-	rates      map[string]rate
-	locks      [97]sync.Mutex
+	db                *bolt.DB
+	dir, admin        string
+	ttl               time.Duration
+	mu                sync.Mutex
+	online            map[string]map[string]int
+	signals           map[string]chan struct{}
+	rates             map[string]rate
+	locks             [97]sync.Mutex
+	minFree, reserved uint64
+	attempts          int
 }
 
 func openService(dir, admin string, ttl time.Duration) (*service, error) {
@@ -80,7 +82,22 @@ func openService(dir, admin string, ttl time.Duration) (*service, error) {
 		db.Close()
 		return nil, err
 	}
-	return &service{db: db, dir: dir, admin: admin, ttl: ttl, online: map[string]map[string]int{}, signals: map[string]chan struct{}{}, rates: map[string]rate{}}, nil
+	return &service{db: db, dir: dir, admin: admin, ttl: ttl, minFree: 64 << 20, attempts: 90, online: map[string]map[string]int{}, signals: map[string]chan struct{}{}, rates: map[string]rate{}}, nil
+}
+
+// Account for independent chunk writers before admitting another disk write.
+func (s *service) reserve(bytes uint64) (func(), error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	available, err := freeSpace(s.dir)
+	if err != nil {
+		return nil, err
+	}
+	if available < s.minFree || available-s.minFree < s.reserved || available-s.minFree-s.reserved < bytes {
+		return nil, fail(507, "Server disk reserve reached. Free space and resume")
+	}
+	s.reserved += bytes
+	return func() { s.mu.Lock(); s.reserved -= bytes; s.mu.Unlock() }, nil
 }
 func secret(n int) string {
 	b := make([]byte, n)

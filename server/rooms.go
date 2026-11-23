@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
@@ -39,6 +40,10 @@ func (s *service) router() http.Handler {
 				return
 			}
 			if e := h(w, r); e != nil {
+				var p problem
+				if !errors.As(e, &p) || p.status >= 500 {
+					slog.Warn("request failed", "operation", pattern, "class", fmt.Sprintf("%T", e))
+				}
 				jsonError(w, e)
 			}
 		})
@@ -76,7 +81,7 @@ func (s *service) allow(r *http.Request) bool {
 	}
 	v.count++
 	s.rates[host] = v
-	return v.count <= 90
+	return v.count <= s.attempts
 }
 
 type credentials struct {
@@ -85,6 +90,18 @@ type credentials struct {
 }
 
 func enroll(b *bolt.Bucket, r room, name, invite string) (credentials, error) {
+	if e := sub(b, "members").ForEach(func(_, v []byte) error {
+		var m member
+		if e := json.Unmarshal(v, &m); e != nil {
+			return e
+		}
+		if strings.EqualFold(m.Name, name) {
+			return fail(409, "This display name is in use in this room")
+		}
+		return nil
+	}); e != nil {
+		return credentials{}, e
+	}
 	token := secret(32)
 	m := member{secret(12), name, digest(token)}
 	if e := put(sub(b, "members"), m.ID, m); e != nil {
