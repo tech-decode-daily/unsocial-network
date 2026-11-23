@@ -10,3 +10,9 @@
 | Trusted relay operator | Server can access chat and files | Communicate the trust model, use encrypted volumes for sensitive deployments and expire room data |
 | Public service costs | Disk, egress, domain and operation increase with usage | First release supports user-operated servers. For an S-byte file and N full downloads, plan for S bytes stored and about N × S bytes outgoing, before overhead and retries |
 | OS distribution trust | Unsigned builds can trigger OS prompts. A checksum alone does not establish publisher identity | Sign Windows artifacts, sign and notarize macOS artifacts, record separate native install and launch results |
+
+## Recovery fixes exercised in this implementation
+
+- A creator could leave a room and restart the app, leaving peers waiting because the desktop used the creator's own membership to decide whether to launch the service. Startup now detects the saved host database. The packaged Windows test observed the guest reconnect and exchange a message after this sequence.
+- A process exit after linking a verified download could leave a partial file with two hard links. The queue now checkpoints the candidate destination and reconciles its identity and hash before retrying publication. An integration test recreated that boundary and recovered the same file.
+- A disk reserve failure now produces HTTP 507 before accepting a chunk. The test verified the committed offset stayed at zero, restored available capacity, and retried the transfer.

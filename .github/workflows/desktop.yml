@@ -1,0 +1,64 @@
+name: Verify desktop archives
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [desktop-release, main]
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2025, ubuntu-24.04, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm test
+      - run: npm run package
+      - run: node scripts/verify-archive.mjs
+      - name: Test extracted Windows application
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive=Get-ChildItem dist/*.zip
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath build/native-check
+          $env:UNSOCIAL_TEST_EXECUTABLE=(Resolve-Path 'build/native-check/Unsocial Network/Unsocial Network.exe').Path
+          npm run test:desktop
+      - name: Test extracted Linux application
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          unzip -q dist/*.zip -d build/native-check
+          app="$PWD/build/native-check/Unsocial Network"
+          sudo chown root:root "$app/chrome-sandbox"
+          sudo chmod 4755 "$app/chrome-sandbox"
+          UNSOCIAL_TEST_EXECUTABLE="$app/unsocial-network" xvfb-run -a npm run test:desktop
+      - name: Test extracted macOS application
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p build/native-check
+          archive=(dist/*.zip)
+          ditto -x -k "${archive[0]}" build/native-check
+          UNSOCIAL_TEST_EXECUTABLE="$PWD/build/native-check/Unsocial Network.app/Contents/MacOS/UnsocialNetwork" npm run test:desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.runner }}
+          path: |
+            dist/*.zip
+            dist/*.sha256
+            artifacts/*.png
+
