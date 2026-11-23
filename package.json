@@ -1,0 +1,23 @@
+{
+  "name": "unsocial-network",
+  "version": "0.1.0",
+  "description": "Private desktop rooms for file exchange and chat",
+  "private": true,
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "build:server": "node scripts/build-server.mjs",
+    "test": "node scripts/test.mjs",
+    "test:desktop": "node tests/desktop.mjs",
+    "package": "node scripts/package.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "electron": "45.4.1",
+    "playwright-core": "latest",
+    "yauzl": "latest",
+    "yazl": "latest"
+  }
+}
