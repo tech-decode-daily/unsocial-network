@@ -55,7 +55,7 @@ exec(process.execPath, ["scripts/build-server.mjs", os, arch]);
 const mac = os === "darwin",
   win = os === "win32",
   platform = { win32: "Windows", darwin: "macOS", linux: "Linux" }[os];
-const root = mac ? "Unsocial Network.app/Contents/" : "Unsocial Network/";
+const root = { darwin: "Unsocial Network.app/Contents/", win32: "Unsocial Network/", linux: "unsocial-network/" }[os];
 const appRoot = root + (mac ? "Resources/app/" : "resources/app/");
 const dist = "dist",
   filename =
@@ -177,6 +177,8 @@ if (mac) {
   zip.addBuffer(Buffer.from(plist), root + "Info.plist", options());
 }
 zip.addFile("README.md", mac ? "Read me.md" : root + "Read me.md", options());
+if (os === "linux")
+  zip.addFile("packaging/linux/unsocial-network.apparmor", root + "unsocial-network.apparmor", options());
 zip.end();
 await done;
 runtime.close();

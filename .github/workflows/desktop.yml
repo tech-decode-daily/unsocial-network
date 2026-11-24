@@ -45,11 +45,14 @@ jobs:
           DEBUG: pw:browser
           ELECTRON_ENABLE_LOGGING: '1'
         run: |
-          unzip -q dist/*.zip -d build/native-check
-          app="$PWD/build/native-check/Unsocial Network"
+          sudo unzip -q dist/*.zip -d /opt
+          app=/opt/unsocial-network
           ldd "$app/unsocial-network"
-          sudo chown root:root "$app/chrome-sandbox"
-          sudo chmod 4755 "$app/chrome-sandbox"
+          sudo chmod 0755 "$app/chrome-sandbox"
+          if [[ "$(cat /sys/module/apparmor/parameters/enabled 2>/dev/null)" == Y ]]; then
+            sudo install -m 0644 "$app/unsocial-network.apparmor" /etc/apparmor.d/unsocial-network
+            sudo apparmor_parser -r /etc/apparmor.d/unsocial-network
+          fi
           UNSOCIAL_TEST_EXECUTABLE="$app/unsocial-network" xvfb-run -a npm run test:desktop
       - name: Test extracted macOS application
         if: runner.os == 'macOS'

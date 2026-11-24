@@ -57,7 +57,7 @@ const systems = [
   },
   {
     id: "linux", title: "Linux", platform: "Linux",
-    instruction: "Extract with Unix permissions intact and run ./unsocial-network in a graphical session with Chromium sandbox support.",
+    instruction: "Extract the ZIP to a path without spaces and run ./unsocial-network. On Ubuntu 24.04 or newer, follow the Ubuntu installation steps in the included Read me.md.",
     builds: [{ arch: "x64", label: "Download for Linux", detail: "Intel / AMD 64-bit" }],
   },
 ];

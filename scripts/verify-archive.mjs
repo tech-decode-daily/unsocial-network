@@ -15,8 +15,9 @@ async function data(zip, entry) {
   for await (const b of await zip.openReadStreamPromise(entry)) parts.push(b);
   return Buffer.concat(parts);
 }
+const { version } = JSON.parse(await fsp.readFile("package.json", "utf8"));
 const files = (await fsp.readdir("dist"))
-  .filter((name) => name.endsWith(".zip"))
+  .filter((name) => name.startsWith("Unsocial-Network-" + version + "-") && name.endsWith(".zip"))
   .sort();
 const checksums = [];
 assert.ok(files.length, "No release archives found");
@@ -34,7 +35,7 @@ for (const name of files) {
   const win = name.includes("-Windows-"),
     mac = name.includes("-macOS-"),
     arm = name.endsWith("-arm64.zip");
-  const root = mac ? "Unsocial Network.app/Contents/" : "Unsocial Network/",
+  const root = mac ? "Unsocial Network.app/Contents/" : win ? "Unsocial Network/" : "unsocial-network/",
     app = root + (mac ? "Resources/app/" : "resources/app/");
   const get = (k) => {
     assert.ok(entries.has(k), "Missing " + k);
@@ -76,6 +77,7 @@ for (const name of files) {
       );
       assert.equal((await data(zip, symlink)).toString(), "A");
     } else {
+      assert.deepEqual(await data(zip, get(root + "unsocial-network.apparmor")), await fsp.readFile("packaging/linux/unsocial-network.apparmor"));
       assert.equal(exe.readUInt32BE(0), 0x7f454c46);
       assert.equal(exe.readUInt16LE(18), 62);
       assert.ok(

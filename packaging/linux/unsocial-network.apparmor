@@ -1,0 +1,6 @@
+abi <abi/4.0>,
+include <tunables/global>
+
+profile unsocial-network /opt/unsocial-network/unsocial-network flags=(unconfined) {
+  userns,
+}
