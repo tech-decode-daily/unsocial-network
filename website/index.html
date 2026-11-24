@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f6f5ed">
+  <meta name="description" content="Download Unsocial Network for Windows, macOS and Linux. Share files and chat in a private room hosted on your desktop.">
+  <title>Unsocial Network — Desktop downloads</title>
+  <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="site.css">
+  <script src="site.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="wrap mast">
+    <a class="brand" href="#main" aria-label="Unsocial Network home"><img src="assets/mark.svg" width="38" height="38" alt=""><span>unsocial<br>network.</span></a>
+    <nav aria-label="Main navigation"><a href="#downloads">Downloads</a><a href="#guide">Quick start</a><a href="{{source}}">{{sourceLabel}} <span aria-hidden="true">↗</span></a></nav>
+  </header>
+  <main id="main">
+    <section class="wrap hero" aria-labelledby="title">
+      <div class="intro">
+        <p class="edition"><span class="cursor" aria-hidden="true"></span> Desktop release candidate <span>/</span> v{{version}}</p>
+        <h1 id="title">A room for<br>your files<span>.</span></h1>
+        <p class="lead">Open a private room on your desktop. Invite someone to chat and share files of any type.</p>
+        <a class="button" href="#downloads">Choose a download <span class="arrow" aria-hidden="true">↓</span></a>
+      </div>
+      <figure class="terminal"><img src="assets/terminal.webp" width="1448" height="1086" alt="An ivory computer terminal displaying the app’s green wireframe globe on a blue background." fetchpriority="high"></figure>
+    </section>
+    <section id="downloads" class="download-section">
+      <div class="wrap download-layout">
+        <div class="section-copy"><h2>Get the app<span>.</span></h2><p>Choose your operating system. Each portable ZIP includes the desktop client and room service.</p></div>
+        <div class="chooser">
+          <div class="system-tabs" role="tablist" aria-label="Operating system" hidden>
+            <button id="tab-windows" role="tab" aria-controls="windows">Windows</button>
+            <button id="tab-macos" role="tab" aria-controls="macos">macOS</button>
+            <button id="tab-linux" role="tab" aria-controls="linux">Linux</button>
+          </div>
+          {{panels}}
+          <p class="archive-note">Unsigned release candidate. <a href="{{checksums}}" download>SHA-256 checksums</a></p>
+        </div>
+      </div>
+    </section>
+    <section class="wrap guide" id="guide" aria-labelledby="guide-heading">
+      <div>
+        <h2 id="guide-heading">Your first room<span>.</span></h2>
+        <ol class="steps">
+          <li><h3>Open the desktop app</h3><p>Extract the full archive on each computer. Both desktops need a network route to the room host.</p></li>
+          <li><h3>Share an invitation</h3><p>Choose <strong>Create room</strong> and send its invitation privately. Your guest pastes it into <strong>Join room</strong>.</p></li>
+          <li><h3>Drop in a file</h3><p>Drag a file into the room. Guests choose what to download, and Transfers shows progress and verification. Keep the host app running.</p></li>
+        </ol>
+      </div>
+      <figure class="preview"><img src="assets/room-directory.png" width="782" height="553" loading="lazy" alt="The desktop room directory with Create room and Join room controls."><figcaption>Room directory <span>Windows desktop</span></figcaption></figure>
+    </section>
+  </main>
+  <footer class="wrap"><span>Unsocial Network</span><a href="{{notes}}">Release notes <span aria-hidden="true">↗</span></a></footer>
+</body>
+</html>

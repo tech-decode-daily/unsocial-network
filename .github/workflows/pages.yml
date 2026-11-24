@@ -1,0 +1,61 @@
+name: Publish download website
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'scripts/build-site.mjs'
+      - '.github/workflows/pages.yml'
+permissions:
+  contents: read
+concurrency:
+  group: download-pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      ready: ${{ steps.release.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Read published desktop release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="v$(node -p "require('./package.json').version")"
+          mkdir -p build
+          code=$(curl --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" --output build/release.json \
+            --write-out '%{http_code}' "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/releases/tags/$tag")
+          if [[ "$code" = 404 && "$GITHUB_EVENT_NAME" = push ]]; then
+            echo "Waiting for the first public release." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          test "$code" = 200
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+      - if: steps.release.outputs.ready == 'true'
+        run: node scripts/build-site.mjs --release-json build/release.json --repository "$GITHUB_REPOSITORY"
+      - uses: actions/upload-pages-artifact@v4
+        if: steps.release.outputs.ready == 'true'
+        with:
+          path: build/download-site
+  deploy:
+    needs: build
+    if: needs.build.outputs.ready == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: pages
+        uses: actions/deploy-pages@v4

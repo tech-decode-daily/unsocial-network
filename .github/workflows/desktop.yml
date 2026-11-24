@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [desktop-release, main]
+    tags: ['v*']
 permissions:
   contents: read
 jobs:
@@ -57,8 +58,68 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.runner }}
+          compression-level: 0
+          retention-days: 3
+          if-no-files-found: error
           path: |
             dist/*.zip
             dist/*.sha256
-            artifacts/*.png
+
+  release:
+    needs: desktop
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: dist
+          merge-multiple: true
+      - name: Verify the release and build the local download page
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          test "$GITHUB_REF_NAME" = "v$version"
+          cd dist
+          for suffix in Windows-x64 Linux-x64 macOS-arm64 macOS-x64; do
+            name="Unsocial-Network-$version-$suffix.zip"
+            test -s "$name"
+            sha256sum --check "$name.sha256"
+          done
+          sha256sum *.zip > SHA256SUMS.txt
+          cd ..
+          npm ci --ignore-scripts
+          npm run build:site
+          npm run test:site
+      - name: Publish the tested archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          cd dist
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --prerelease \
+              --title "Unsocial Network $version — desktop release candidate" \
+              --notes-file ../CHANGELOG.md *.zip *.sha256 SHA256SUMS.txt
+          else
+            for asset in *.zip *.sha256 SHA256SUMS.txt; do
+              digest=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" \
+                --jq ".assets[] | select(.name == \"$asset\") | .digest")
+              test "$digest" = "sha256:$(sha256sum "$asset" | cut -d' ' -f1)"
+            done
+          fi
+      - name: Deploy the download site from the default branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: gh workflow run pages.yml --ref "$DEFAULT_BRANCH"
 

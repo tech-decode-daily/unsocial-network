@@ -4,7 +4,7 @@ Unsocial Network is a desktop file exchange with invite-only rooms, presence and
 
 ## Desktop downloads
 
-The portable release candidates are in the project's `dist` directory. Extract the entire archive before launching. The client includes its runtime and room service. End users do not need Go or Node.js.
+Choose your operating system on the download page. The local copy opens at `build/download-site/index.html` after `npm run build:site` and uses the portable archives in `dist`. The published page uses the versioned assets from GitHub Releases. Extract the entire archive before launching. The desktop client includes its runtime and room service.
 
 | System | Archive suffix | Launch |
 | --- | --- | --- |

@@ -40,3 +40,7 @@ Each package build checked the upstream Electron ZIP against the checksum suppli
 
 The downloadable files are portable release candidates. Public hosting and publisher signing remain pending.
 
+## Desktop download website, 24 November 2026
+
+Rechecked all four archive hashes, packaged assets, launchers and architectures against the desktop release. All seven Node tests passed, and the packaged Windows two-desktop workflow passed again. The browser test downloaded all four ZIPs from the local static page and independently hashed the received bytes. Keyboard navigation, a reduced-motion session, widths of 320, 390 and 768 pixels, and the JavaScript-disabled fallback passed. The desktop and mobile layouts were visually inspected. Linux and macOS execution will be recorded by the native release workflow.
+

@@ -36,5 +36,11 @@ Monitor disk space, inode capacity, memory, open connections, expiry cleanup, ce
 
 ## Distribution and release verification
 
-Native test jobs in `.github/workflows/desktop.yml` exercise candidate archives on their respective runners when the project is placed on GitHub. Packaging also runs locally from the lockfile. Validate the extracted artifacts, hashes, launch, two-client chat, interrupted transfer and OS trust before public distribution. Obtain publisher credentials for Windows and Apple Developer ID credentials for macOS. The macOS public release additionally needs notarization and stapling. Serve the release and checksums over a trusted HTTPS download origin. There is no configured public download host in this workspace. [Electron signing guidance](https://www.electronjs.org/docs/latest/tutorial/code-signing)
+GitHub Releases stores the ZIP archives. GitHub Pages serves only the download selector, images, fonts and quick start. Room invitations, chat and files go directly to the room host. A public repository can use GitHub Pages on GitHub Free. [GitHub Pages documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)
+
+Select **GitHub Actions** as the repository's Pages source and push the release commit to `main`. Tag that commit with the package version prefixed by `v` and push the tag. The desktop workflow builds and tests the extracted app on Windows, Linux, Apple Silicon and Intel macOS. Its release job checks all four browser downloads, publishes the portable archives and SHA-256 manifest as a prerelease, and dispatches the Pages workflow on the default branch. Subsequent website changes on `main` rebuild the page against that published version. An incomplete release fails the page build. The Pages deployment job reports the public URL.
+
+For a local preview, build all four archives, run `node scripts/verify-archive.mjs`, then `npm run build:site`. Open `build/download-site/index.html` in a browser. `npm run test:site` exercises all platform downloads in Edge on Windows or Chrome on Linux and macOS. Set `UNSOCIAL_TEST_BROWSER` to select an installed Chromium executable.
+
+The candidate workflow distributes unsigned builds. A signed Windows release requires publisher credentials. A signed macOS release requires Apple Developer ID signing, notarization and stapling. Verify OS trust and clean-machine installation for the signed artifacts. [Electron signing guidance](https://www.electronjs.org/docs/latest/tutorial/code-signing)
 
