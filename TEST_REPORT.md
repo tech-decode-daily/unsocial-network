@@ -49,3 +49,9 @@ Windows x64, Ubuntu 24.04 x64, Apple Silicon macOS and Intel macOS each built, e
 
 An anonymous browser session opened the live HTTPS download site, selected each operating system and downloaded all four archives. Each received file matched both the published SHA-256 manifest and its individual checksum. [Download site](https://tech-decode-daily.github.io/unsocial-network/) · [Release assets](https://github.com/tech-decode-daily/unsocial-network/releases/tag/v0.1.1)
 
+## Native installer release 0.1.2
+
+Windows Setup ran under the user's account, created a Start menu shortcut, and passed the two-client chat, file transfer and reconnect tests from the installed executable. The uninstaller removed the application and shortcut. Both macOS 15 runners installed the same PKG into Applications. Each verified the CPU architecture of the installed launcher, embedded Electron runtime and room service, then ran the two-client integration test. Ubuntu installed the DEB, exercised the installed application, and compared its application files with the portable TAR.GZ. [Installer verification run](https://github.com/tech-decode-daily/unsocial-network/actions/runs/45398406073)
+
+After the public site deployed, an anonymous browser selected each operating system and downloaded the Windows EXE, Mac PKG, Linux DEB and Linux TAR.GZ. The full contents of all four matched the release’s SHA-256 manifest. [Live download site](https://tech-decode-daily.github.io/unsocial-network/) · [Published installers](https://github.com/tech-decode-daily/unsocial-network/releases/tag/v0.1.2)
+

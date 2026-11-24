@@ -29,3 +29,5 @@ Downloads go to the Unsocial Network subfolder of Downloads by default. Settings
 
 Use Node.js 24 LTS and the Go version in `server/go.mod`. Run `npm ci`, `npm run build:server` and `npm start` from the project root. Run `npm test` for service and transfer checks and `npm run test:desktop` for desktop integration. Build a portable archive with `npm run package -- win32 x64`, `npm run package -- linux x64`, `npm run package -- darwin arm64` or `npm run package -- darwin x64`. Builds verify the Electron runtime archive against the checksums in the locked Electron package.
 
+The native packaging scripts consume those intermediate builds. On Windows, run `packaging/windows/build.ps1` with Inno Setup 6.3 or newer available. On macOS, build both Mac architectures, then run `bash packaging/macos/build.sh` to create the single PKG. On a Debian-based build machine, run `bash packaging/linux/build.sh` after building Linux x64. Public installers are tested in the desktop release workflow.
+

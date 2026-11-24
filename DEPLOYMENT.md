@@ -2,7 +2,7 @@
 
 ## Local rooms
 
-Extract the matching desktop archive and follow README.md. No additional service is required for a reachable LAN. On a private network the bundled host uses its own CA, scoped to invitations. Opening its raw IP address in a browser normally produces an untrusted-issuer warning. The intended LAN entry point is the installed client.
+Install the desktop download for your operating system and follow README.md. No additional service is required for a reachable LAN. On a private network the bundled host uses its own CA, scoped to invitations. Opening its raw IP address in a browser normally produces an untrusted-issuer warning. The intended LAN entry point is the installed client.
 
 ## Public HTTPS service
 
@@ -38,7 +38,7 @@ Monitor disk space, inode capacity, memory, open connections, expiry cleanup, ce
 
 GitHub Releases stores the platform installers and portable Linux download. GitHub Pages serves only the download selector, images, fonts and quick start. Room invitations, chat and files go directly to the room host. A public repository can use GitHub Pages on GitHub Free. [GitHub Pages documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages)
 
-Select **GitHub Actions** as the repository's Pages source and push the release commit to `main`. Tag that commit with the package version prefixed by `v` and push the tag. The desktop workflow installs Windows Setup and the Debian package, checks the portable Linux files, and installs the same Mac package on Apple Silicon and Intel runners. Its release job checks all four browser downloads and publishes their SHA-256 manifest with the prerelease, and dispatches the Pages workflow on the default branch. Subsequent website changes on `main` rebuild the page against that published version. An incomplete release fails the page build. The Pages deployment job reports the public URL.
+Select **GitHub Actions** as the repository's Pages source and push the release commit to `main`. Tag that commit with the package version prefixed by `v` and push the tag. The desktop workflow installs Windows Setup and the Debian package, checks the portable Linux files, and installs the same Mac package on Apple Silicon and Intel runners. Its release job checks all four browser downloads, publishes them with their SHA-256 manifest and dispatches the Pages workflow on the default branch. Subsequent website changes on `main` rebuild the page against that published version. An incomplete release fails the page build. The Pages deployment job reports the public URL.
 
 For a local preview, download the four public packages and their SHA256SUMS.txt into `dist`, then run `npm run build:site`. Open `build/download-site/index.html` in a browser. `npm run test:site` exercises all platform downloads in Edge on Windows or Chrome on Linux and macOS. Set `UNSOCIAL_TEST_BROWSER` to select an installed Chromium executable.
 
