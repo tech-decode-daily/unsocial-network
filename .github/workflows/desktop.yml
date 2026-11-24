@@ -41,9 +41,13 @@ jobs:
       - name: Test extracted Linux application
         if: runner.os == 'Linux'
         shell: bash
+        env:
+          DEBUG: pw:browser
+          ELECTRON_ENABLE_LOGGING: '1'
         run: |
           unzip -q dist/*.zip -d build/native-check
           app="$PWD/build/native-check/Unsocial Network"
+          ldd "$app/unsocial-network"
           sudo chown root:root "$app/chrome-sandbox"
           sudo chmod 4755 "$app/chrome-sandbox"
           UNSOCIAL_TEST_EXECUTABLE="$app/unsocial-network" xvfb-run -a npm run test:desktop
