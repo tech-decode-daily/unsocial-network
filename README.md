@@ -4,7 +4,9 @@ Unsocial Network is a desktop file exchange with invite-only rooms, presence and
 
 ## Desktop downloads
 
-Choose your operating system on the download page. The local copy opens at `build/download-site/index.html` after `npm run build:site` and uses the portable archives in `dist`. The published page uses the versioned assets from GitHub Releases. Extract the entire archive before launching. The desktop client includes its runtime and room service.
+Choose Windows, macOS or Linux on the download page. Extract the entire archive before launching. The desktop client includes its runtime and room service. [Download Unsocial Network](https://tech-decode-daily.github.io/unsocial-network/)
+
+For an offline copy of the page, `npm run build:site` uses the portable archives in `dist` and writes `build/download-site/index.html`.
 
 | System | Archive suffix | Launch |
 | --- | --- | --- |

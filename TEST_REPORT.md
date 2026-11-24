@@ -20,7 +20,7 @@ Executed on **23 November 2026** in the supplied Windows 11 x64 workspace. The t
 | Interactive Windows inspection | Opened the extracted app normally and inspected the room directory and Create room form. User input took over that instance during the form check. The native file-picker round trip remains unverified manually |
 | Static and dependency checks | `go vet ./...` succeeded. `govulncheck ./...` reported no known reachable vulnerabilities for this build. `npm audit` reported zero known dependency vulnerabilities at check time |
 
-## Release archives
+## Local 0.1.0 archives, 23 November 2026
 
 Each package build checked the upstream Electron ZIP against the checksum supplied with the locked Electron dependency. The final `node scripts/verify-archive.mjs` run recomputed all four distribution checksums, compared packaged desktop assets with the working sources, checked required paths and binary architectures, and checked Unix executable bits and the macOS framework symlink. The resulting manifest is `dist/SHA256SUMS.txt`.
 
@@ -33,14 +33,19 @@ Each package build checked the upstream Electron ZIP against the checksum suppli
 
 ## Outstanding public-release checks
 
-- Run the native release matrix in `.github/workflows/desktop.yml` on Linux and both Mac architectures. The workspace has no Git remote, macOS runner or installed WSL distribution.
 - Exercise two physical computers across a LAN and a separately hosted internet room. Check firewall prompts, sleep/wake, adapter changes, sustained slow links and transfer sizes above the tested 256 MiB. Measured results here establish neither a throughput guarantee nor a maximum room size.
 - Validate the production hostname, certificate chain, renewal, WSS, browser trust and reverse proxy in the intended deployment. A domain, live endpoint and hosting configuration were not supplied.
 - Complete native file-picker, OS keyring and clean-machine installation checks across supported desktops. Confirm publisher signatures, macOS notarization and OS acceptance using distribution credentials.
 
-The downloadable files are portable release candidates. Public hosting and publisher signing remain pending.
+The downloadable files are unsigned portable release candidates.
 
 ## Desktop download website, 24 November 2026
 
-Rechecked all four archive hashes, packaged assets, launchers and architectures against the desktop release. All seven Node tests passed, and the packaged Windows two-desktop workflow passed again. The browser test downloaded all four ZIPs from the local static page and independently hashed the received bytes. Keyboard navigation, a reduced-motion session, widths of 320, 390 and 768 pixels, and the JavaScript-disabled fallback passed. The desktop and mobile layouts were visually inspected. Linux and macOS execution will be recorded by the native release workflow.
+Rechecked all four archive hashes, packaged assets, launchers and architectures against the desktop release. All seven Node tests passed, and the packaged Windows two-desktop workflow passed again. The browser test downloaded all four ZIPs from the local static page and independently hashed the received bytes. Keyboard navigation, a reduced-motion session, widths of 320, 390 and 768 pixels, and the JavaScript-disabled fallback passed. The desktop and mobile layouts were visually inspected.
+
+## Native 0.1.1 release verification, 24 November 2026
+
+Windows x64, Ubuntu 24.04 x64, Apple Silicon macOS and Intel macOS each built, extracted and ran their own archive. On each runner, two desktop processes created and joined a room, exchanged chat, compared the downloaded file to the source, and reconnected after the host restarted. Ubuntu used the packaged AppArmor profile at the documented installation path. [Tagged native verification run](https://github.com/tech-decode-daily/unsocial-network/actions/runs/45340871228)
+
+An anonymous browser session opened the live HTTPS download site, selected each operating system and downloaded all four archives. Each received file matched both the published SHA-256 manifest and its individual checksum. [Download site](https://tech-decode-daily.github.io/unsocial-network/) · [Release assets](https://github.com/tech-decode-daily/unsocial-network/releases/tag/v0.1.1)
 
