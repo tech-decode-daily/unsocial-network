@@ -170,10 +170,13 @@ if (mac) {
     },
   );
   zip.addFile(out, root + "MacOS/UnsocialNetwork", options(0o100755));
+  // The first portable bundle used build 1. Keep subsequent dotted builds above it.
+  const [major, minor, patch] = packageInfo.version.split(".");
+  const bundleVersion = [Number(major) + 1, minor, patch].join(".");
   const plist =
     '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleName</key><string>Unsocial Network</string><key>CFBundleDisplayName</key><string>Unsocial Network</string><key>CFBundleIdentifier</key><string>network.unsocial.desktop</string><key>CFBundleExecutable</key><string>UnsocialNetwork</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleShortVersionString</key><string>' +
     packageInfo.version +
-    "</string><key>CFBundleVersion</key><string>1</string><key>NSHighResolutionCapable</key><true/></dict></plist>";
+    "</string><key>CFBundleVersion</key><string>" + bundleVersion + "</string><key>NSHighResolutionCapable</key><true/></dict></plist>";
   zip.addBuffer(Buffer.from(plist), root + "Info.plist", options());
 }
 zip.addFile("README.md", mac ? "Read me.md" : root + "Read me.md", options());

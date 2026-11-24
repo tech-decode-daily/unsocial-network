@@ -4,32 +4,18 @@ Unsocial Network is a desktop file exchange with invite-only rooms, presence and
 
 ## Desktop downloads
 
-Choose Windows, macOS or Linux on the download page. Extract the entire archive before launching. The desktop client includes its runtime and room service. [Download Unsocial Network](https://tech-decode-daily.github.io/unsocial-network/)
+Choose Windows, macOS or Linux on the download page. The desktop client includes its runtime and room service. [Download Unsocial Network](https://tech-decode-daily.github.io/unsocial-network/)
 
-For an offline copy of the page, `npm run build:site` uses the portable archives in `dist` and writes `build/download-site/index.html`.
+For an offline copy of the page, `npm run build:site` uses the release files and checksum manifest in `dist` and writes `build/download-site/index.html`.
 
-| System | Archive suffix | Launch |
+| System | Download | How to open the app |
 | --- | --- | --- |
-| Windows x64 | `Windows-x64.zip` | Open `Unsocial Network.exe` from the extracted folder |
-| Linux x64 | `Linux-x64.zip` | Extract into a path without spaces and run `./unsocial-network` in the extracted folder. Requires a graphical session, Chromium's system libraries and sandbox support. See the Ubuntu setup below |
-| macOS Apple Silicon | `macOS-arm64.zip` | Extract the app bundle with Archive Utility and move it to Applications |
-| macOS Intel | `macOS-x64.zip` | Use the Intel app bundle on an Intel Mac |
+| Windows x64 | Setup EXE | Run the installer, choose Install, then open Unsocial Network from Start. Setup installs for your Windows account. You can uninstall it from Installed apps. |
+| macOS (Apple Silicon and Intel) | Mac PKG | Double-click the package and follow Installer. It selects your Mac’s chip automatically. Open Unsocial Network from Applications. |
+| Ubuntu / Debian x64 | DEB | Open the package in Software Install and choose Install. Launch Unsocial Network from the app menu. Ubuntu's AppArmor profile is included. |
+| Other Linux x64 | Portable TAR.GZ | Extract the folder to a path without spaces and run `./unsocial-network` inside it. Requires a graphical desktop, Chromium's system libraries and working sandbox support. |
 
-Compare the archive's SHA-256 with its adjacent checksum. The candidate archives have no Unsocial Network publisher signature. A public macOS release needs Developer ID signing and notarization. A public Windows release needs publisher signing. See TEST_REPORT.md in the source tree for the exact verification status.
-
-### Ubuntu 24.04 and newer
-
-Ubuntu restricts unprivileged user namespaces. The archive includes an AppArmor profile scoped to the executable installed at `/opt/unsocial-network/unsocial-network`. After verifying the ZIP checksum, run these commands from the download directory on a machine you administer. For an upgrade, close the running app first.
-
-```sh
-sudo unzip -o Unsocial-Network-0.1.1-Linux-x64.zip -d /opt
-sudo chmod 0755 /opt/unsocial-network/chrome-sandbox
-sudo install -m 0644 /opt/unsocial-network/unsocial-network.apparmor /etc/apparmor.d/unsocial-network
-sudo apparmor_parser -r /etc/apparmor.d/unsocial-network
-/opt/unsocial-network/unsocial-network
-```
-
-Launch the final command as your regular desktop user. The profile permits Chromium to create its sandbox. [Ubuntu release notes](https://documentation.ubuntu.com/release-notes/24.04/)
+These are unsigned release candidates. Windows may show a publisher warning and macOS may block the installer until Developer ID signing and notarization are in place. SHA-256 checksums accompany the downloads.
 
 ## Hosting and recovery
 

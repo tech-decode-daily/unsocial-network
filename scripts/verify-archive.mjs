@@ -19,13 +19,11 @@ const { version } = JSON.parse(await fsp.readFile("package.json", "utf8"));
 const files = (await fsp.readdir("dist"))
   .filter((name) => name.startsWith("Unsocial-Network-" + version + "-") && name.endsWith(".zip"))
   .sort();
-const checksums = [];
 assert.ok(files.length, "No release archives found");
 for (const name of files) {
   const file = path.join("dist", name);
   const expected = (await fsp.readFile(file + ".sha256", "utf8")).split(" ")[0];
   assert.equal(await digest(fs.createReadStream(file)), expected);
-  checksums.push(expected + "  " + name);
   const zip = await openPromise(file, { autoClose: false, lazyEntries: true }),
     entries = new Map();
   for await (const entry of zip.eachEntry()) {
@@ -88,7 +86,3 @@ for (const name of files) {
   zip.close();
   console.log(name + " verified · " + entries.size + " entries");
 }
-await fsp.writeFile(
-  path.join("dist", "SHA256SUMS.txt"),
-  checksums.join("\n") + "\n",
-);

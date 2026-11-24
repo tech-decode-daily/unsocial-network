@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Unsocial Network
+Comment=Private rooms for files and chat
+Exec=/opt/unsocial-network/unsocial-network
+Icon=unsocial-network
+Terminal=false
+Categories=Network;Chat;

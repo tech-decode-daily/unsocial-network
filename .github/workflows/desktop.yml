@@ -1,4 +1,4 @@
-name: Verify desktop archives
+name: Build, install and verify desktop downloads
 on:
   workflow_dispatch:
   pull_request:
@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [windows-2025, ubuntu-24.04, macos-15, macos-15-intel]
+        runner: [windows-2025, ubuntu-24.04, macos-15]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     steps:
@@ -29,39 +29,42 @@ jobs:
       - run: npm audit --audit-level=high
       - run: npm test
       - run: npm run package
+      - name: Build the second Mac payload
+        if: runner.os == 'macOS'
+        run: npm run package -- darwin x64
       - run: node scripts/verify-archive.mjs
-      - name: Test extracted Windows application
+      - name: Build Windows Setup and test the installed application
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $archive=Get-ChildItem dist/*.zip
-          Expand-Archive -LiteralPath $archive.FullName -DestinationPath build/native-check
-          $env:UNSOCIAL_TEST_EXECUTABLE=(Resolve-Path 'build/native-check/Unsocial Network/Unsocial Network.exe').Path
+          ./packaging/windows/build.ps1
+          $setup = (Get-ChildItem dist/*-Setup.exe).FullName
+          $process = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          if ($process.ExitCode) { throw "Setup failed with $($process.ExitCode)" }
+          $appDir = Join-Path $env:LOCALAPPDATA 'Programs/Unsocial Network'
+          $shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'Unsocial Network.lnk'
+          if (!(Test-Path -LiteralPath $shortcut)) { throw 'Start menu entry missing' }
+          $env:UNSOCIAL_TEST_EXECUTABLE = (Resolve-Path "$appDir/Unsocial Network.exe").Path
           npm run test:desktop
-      - name: Test extracted Linux application
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $uninstall = (Get-ChildItem -LiteralPath $appDir -Filter 'unins*.exe').FullName
+          $process = Start-Process -FilePath $uninstall -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          if ($process.ExitCode -or (Test-Path -LiteralPath $env:UNSOCIAL_TEST_EXECUTABLE) -or (Test-Path -LiteralPath $shortcut)) { throw 'Uninstall failed' }
+      - name: Build and install Ubuntu package and verify the portable copy
         if: runner.os == 'Linux'
         shell: bash
-        env:
-          DEBUG: pw:browser
-          ELECTRON_ENABLE_LOGGING: '1'
         run: |
-          sudo unzip -q dist/*.zip -d /opt
-          app=/opt/unsocial-network
-          ldd "$app/unsocial-network"
-          sudo chmod 0755 "$app/chrome-sandbox"
-          if [[ "$(cat /sys/module/apparmor/parameters/enabled 2>/dev/null)" == Y ]]; then
-            sudo install -m 0644 "$app/unsocial-network.apparmor" /etc/apparmor.d/unsocial-network
-            sudo apparmor_parser -r /etc/apparmor.d/unsocial-network
-          fi
-          UNSOCIAL_TEST_EXECUTABLE="$app/unsocial-network" xvfb-run -a npm run test:desktop
-      - name: Test extracted macOS application
+          bash packaging/linux/build.sh
+          sudo apt-get update -qq
+          sudo apt-get install -y "$PWD"/dist/*.deb
+          test -f /usr/share/applications/unsocial-network.desktop
+          mkdir -p build/portable-check
+          tar -xzf dist/*.tar.gz -C build/portable-check
+          diff -qr /opt/unsocial-network build/portable-check/unsocial-network
+          UNSOCIAL_TEST_EXECUTABLE=/opt/unsocial-network/unsocial-network xvfb-run -a npm run test:desktop
+      - name: Build the Mac installer for both chips
         if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          mkdir -p build/native-check
-          archive=(dist/*.zip)
-          ditto -x -k "${archive[0]}" build/native-check
-          UNSOCIAL_TEST_EXECUTABLE="$PWD/build/native-check/Unsocial Network.app/Contents/MacOS/UnsocialNetwork" npm run test:desktop
+        run: bash packaging/macos/build.sh
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.runner }}
@@ -69,11 +72,44 @@ jobs:
           retention-days: 3
           if-no-files-found: error
           path: |
-            dist/*.zip
-            dist/*.sha256
+            dist/*.exe
+            dist/*.pkg
+            dist/*.deb
+            dist/*.tar.gz
+
+  mac-install:
+    needs: desktop
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-macos-15
+          path: dist
+      - name: Install the public package and run the installed app
+        shell: bash
+        run: |
+          pkg=(dist/*.pkg)
+          sudo installer -pkg "${pkg[0]}" -target /
+          contents="/Applications/Unsocial Network.app/Contents"
+          expected=$(uname -m)
+          for binary in "$contents/MacOS/UnsocialNetwork" "$contents/Resources/app/bin/unsocial-room" "$contents/Frameworks/Electron.app/Contents/MacOS/Electron"; do
+            test "$(lipo -archs "$binary")" = "$expected"
+          done
+          UNSOCIAL_TEST_EXECUTABLE="$contents/MacOS/UnsocialNetwork" npm run test:desktop
 
   release:
-    needs: desktop
+    needs: [desktop, mac-install]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     permissions:
@@ -96,17 +132,17 @@ jobs:
           version=$(node -p "require('./package.json').version")
           test "$GITHUB_REF_NAME" = "v$version"
           cd dist
-          for suffix in Windows-x64 Linux-x64 macOS-arm64 macOS-x64; do
-            name="Unsocial-Network-$version-$suffix.zip"
-            test -s "$name"
-            sha256sum --check "$name.sha256"
+          files=("Unsocial-Network-$version-Windows-x64-Setup.exe" "Unsocial-Network-$version-macOS.pkg" "Unsocial-Network-$version-Linux-x64.deb" "Unsocial-Network-$version-Linux-x64.tar.gz")
+          for file in "${files[@]}"; do
+            test -s "$file"
+            sha256sum "$file" > "$file.sha256"
           done
-          sha256sum *.zip > SHA256SUMS.txt
+          cat *.sha256 > SHA256SUMS.txt
           cd ..
           npm ci --ignore-scripts
           npm run build:site
           npm run test:site
-      - name: Publish the tested archives
+      - name: Publish the tested downloads
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -116,9 +152,9 @@ jobs:
           if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release create "$GITHUB_REF_NAME" --verify-tag --prerelease \
               --title "Unsocial Network $version — desktop release candidate" \
-              --notes-file ../CHANGELOG.md *.zip *.sha256 SHA256SUMS.txt
+              --notes-file ../CHANGELOG.md *.exe *.pkg *.deb *.tar.gz *.sha256 SHA256SUMS.txt
           else
-            for asset in *.zip *.sha256 SHA256SUMS.txt; do
+            for asset in *.exe *.pkg *.deb *.tar.gz *.sha256 SHA256SUMS.txt; do
               digest=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$GITHUB_REF_NAME" \
                 --jq ".assets[] | select(.name == \"$asset\") | .digest")
               test "$digest" = "sha256:$(sha256sum "$asset" | cut -d' ' -f1)"

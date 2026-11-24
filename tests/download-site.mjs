@@ -30,13 +30,17 @@ try {
   await mkdir("artifacts", { recursive: true });
   await page.screenshot({ path: "artifacts/download-desktop.png", fullPage: true });
   const downloaded = new Set();
-  for (const platform of ["Windows", "macOS", "Linux"]) {
+  const expectedFormats = { Windows: ["-Windows-x64-Setup.exe"], macOS: ["-macOS.pkg"], Linux: ["-Linux-x64.deb", "-Linux-x64.tar.gz"] };
+  for (const [platform, formats] of Object.entries(expectedFormats)) {
     const tab = page.getByRole("tab", { name: platform, exact: true });
     await tab.click();
     assert.equal(await tab.getAttribute("aria-selected"), "true");
-    for (const anchor of await page.getByRole("tabpanel", { name: platform }).locator("a[download]").all()) {
+    const links = await page.getByRole("tabpanel", { name: platform }).locator("a[download]").all();
+    assert.equal(links.length, formats.length);
+    for (const [index, anchor] of links.entries()) {
       const [download] = await Promise.all([page.waitForEvent("download"), anchor.click()]);
       const filename = download.suggestedFilename();
+      assert.ok(filename.endsWith(formats[index]), filename);
       const digest = createHash("sha256");
       for await (const block of await download.createReadStream()) digest.update(block);
       assert.equal(digest.digest("hex"), sums.get(filename), filename);

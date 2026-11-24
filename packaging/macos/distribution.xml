@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+  <title>Unsocial Network</title>
+  <options customize="never" hostArchitectures="arm64,x86_64" require-scripts="true"/>
+  <domains enable_localSystem="true" enable_currentUserHome="false" enable_anywhere="false"/>
+  <choices-outline>
+    <line choice="apple-silicon"/>
+    <line choice="intel"/>
+  </choices-outline>
+  <choice id="apple-silicon" visible="false" selected="system.sysctl('hw.machine') == 'arm64'">
+    <pkg-ref id="network.unsocial.desktop.arm64"/>
+  </choice>
+  <choice id="intel" visible="false" selected="system.sysctl('hw.machine') == 'x86_64'">
+    <pkg-ref id="network.unsocial.desktop.x64"/>
+  </choice>
+  <pkg-ref id="network.unsocial.desktop.arm64">arm64.pkg</pkg-ref>
+  <pkg-ref id="network.unsocial.desktop.x64">x64.pkg</pkg-ref>
+</installer-gui-script>

@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+if [ "$1" = configure ] && command -v apparmor_parser >/dev/null && [ "$(cat /sys/module/apparmor/parameters/enabled 2>/dev/null || true)" = Y ]; then
+  apparmor_parser -r /etc/apparmor.d/unsocial-network
+fi
