@@ -57,6 +57,8 @@ func (s *service) router() http.Handler {
 	route("GET /rooms/{room}/events", s.events)
 	route("POST /rooms/{room}/chat", s.chat)
 	route("POST /rooms/{room}/leave", s.leave)
+	route("PUT /rooms/{room}/site", s.setSite)
+	route("GET /rooms/{room}/site/{asset...}", s.siteAsset)
 	route("POST /rooms/{room}/files", s.offer)
 	route("GET /rooms/{room}/files/{file}", s.info)
 	route("PATCH /rooms/{room}/files/{file}", s.appendChunk)
@@ -227,6 +229,7 @@ func (s *service) chat(w http.ResponseWriter, r *http.Request) error {
 }
 
 type snapshot struct {
+	Site       bool
 	Room, Name string
 	Expires    int64
 	Members    []participant
@@ -241,6 +244,9 @@ func (s *service) readState(r *http.Request, after uint64, initial bool) (snapsh
 	e := s.change(r, false, func(b *bolt.Bucket, room room, m member) error {
 		out.Room = room.ID
 		out.Name = room.Name
+		s.mu.Lock()
+		out.Site = s.sites[room.ID] != nil
+		s.mu.Unlock()
 		out.Expires = room.Expires
 		var e error
 		out.Members, e = s.participants(b, room.ID)

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3 desktop release candidate
+
+- Create and join encrypted chat and file rooms through a selected Ethernet adapter, including direct IPv4 cable connections.
+- Start and stop the bundled room server in Settings. Share a static website folder with invited room members and open it in a separate viewer.
+- Copy an individual chat message from its text or with the keyboard.
+- Choose from seven new desktop themes alongside the original. Your choice persists across launches.
+
 ## 0.1.2 desktop installer release candidate
 
 Windows Setup adds Unsocial Network to the Start menu and Installed apps. One macOS package installs the native application in Applications on Apple Silicon and Intel. Ubuntu and Debian have a DEB installer with an app-menu shortcut. A portable TAR.GZ is available for other Linux distributions.

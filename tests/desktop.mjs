@@ -41,8 +41,41 @@ async function launch(name) {
 try {
   const h = await launch("host"),
     g = await launch("guest");
+  await h.w.locator("[data-nav=ethernet]").click();
+  await h.w.getByRole("heading", { name: "Wired adapters" }).waitFor();
+  await h.w.waitForFunction(
+    () =>
+      !document
+        .getElementById("wired-ports")
+        .textContent.includes("Checking wired adapters"),
+  );
+  const wire = await h.w.evaluate(
+    async () =>
+      (await window.network.state()).ethernet?.flatMap((p) => p.addresses)[0],
+  );
+  await h.w.locator("[data-nav=settings]").click();
+  const themes = await h.w
+    .locator("#theme option")
+    .evaluateAll((options) => options.map((o) => o.value));
+  assert.equal(themes.length, 8);
+  for (const theme of themes) {
+    await h.w.locator("#theme").selectOption(theme);
+    assert.equal(await h.w.locator("html").getAttribute("data-theme"), theme);
+  }
+  await h.w.locator("#host-start").click();
+  await h.w.locator("#host-stop").waitFor();
+  await h.w.locator("#host-stop").click();
+  await h.w.locator("#submit").click();
+  await h.w.locator("#host-start").waitFor();
+  await h.w.locator("[data-nav=rooms]").click();
   await h.w.screenshot({ path: path.join(screens, "directory.png") });
-  await h.w.getByRole("button", { name: "Create room" }).click();
+  if (wire) {
+    await h.w.locator("[data-nav=ethernet]").click();
+    await h.w
+      .getByRole("button", { name: "Create wired room" })
+      .first()
+      .click();
+  } else await h.w.getByRole("button", { name: "Create room" }).click();
   await h.w.getByLabel("Room name").fill("Night shift");
   await h.w.getByLabel("Your display name").fill("Ada");
   await h.w.locator("#submit").click();
@@ -58,7 +91,18 @@ try {
   await h.w.locator("#copy").click();
   const invite = await h.app.evaluate(() => globalThis.testInvitation);
   assert.ok(invite.startsWith("unsocial://"));
-  await g.w.getByRole("button", { name: "Join room" }).click();
+  if (wire) {
+    assert.equal(
+      new URL(
+        JSON.parse(
+          Buffer.from(invite.slice("unsocial://join/".length), "base64url"),
+        ).origin,
+      ).hostname,
+      wire,
+    );
+    await g.w.locator("[data-nav=ethernet]").click();
+    await g.w.getByRole("button", { name: "Join wired room" }).first().click();
+  } else await g.w.getByRole("button", { name: "Join room" }).click();
   await g.w.getByLabel("Room invitation").fill(invite);
   await g.w.getByLabel("Your display name").fill("Lin");
   await g.w.locator("#submit").click();
@@ -73,6 +117,54 @@ try {
     .locator("#messages")
     .getByText("Can you check the transfer?")
     .waitFor();
+  const copy = h.w.getByRole("button", { name: "Copy message" });
+  const opacity = () => copy.evaluate((b) => getComputedStyle(b).opacity);
+  const message = h.w.locator(".message-text").first();
+  const bounds = await message.boundingBox();
+  await h.w.mouse.move(
+    bounds.x + bounds.width + 12,
+    bounds.y + bounds.height / 2,
+  );
+  assert.equal(await opacity(), "0");
+  await message.hover();
+  assert.equal(await opacity(), "1");
+  await copy.click();
+  assert.equal(
+    await h.app.evaluate(() => globalThis.testInvitation),
+    "Can you check the transfer?",
+  );
+  await h.w.locator("#chat-text").hover();
+  assert.equal(await opacity(), "0");
+  const site = path.join(tmp, "site");
+  await fs.mkdir(site);
+  await fs.writeFile(
+    path.join(site, "index.html"),
+    '<h1>Team demo</h1><script src="/demo.js"></script><a href="next.html">Next</a>',
+  );
+  await fs.writeFile(
+    path.join(site, "demo.js"),
+    'document.body.dataset.loaded = "yes"',
+  );
+  await fs.writeFile(path.join(site, "next.html"), "<h1>Next page</h1>");
+  await h.app.evaluate(({ dialog }, folder) => {
+    dialog.showOpenDialog = async () => ({
+      canceled: false,
+      filePaths: [folder],
+    });
+  }, site);
+  await h.w.locator("#site-share").click();
+  const opening = g.app.waitForEvent("window");
+  await g.w.locator("#site-open").click();
+  const viewer = await opening;
+  await viewer.getByRole("heading", { name: "Team demo" }).waitFor();
+  await viewer.locator('body[data-loaded="yes"]').waitFor();
+  assert.equal(await viewer.evaluate(() => typeof window.network), "undefined");
+  await viewer.getByRole("link", { name: "Next" }).click();
+  await viewer.getByRole("heading", { name: "Next page" }).waitFor();
+  const closed = viewer.waitForEvent("close");
+  await h.w.locator("#site-stop").click();
+  await closed;
+  await g.w.locator("#site-open").waitFor({ state: "hidden" });
   const source = path.join(tmp, "protocol-note.txt"),
     out = path.join(tmp, "received");
   await fs.mkdir(out);
@@ -112,7 +204,11 @@ try {
     .locator("#status")
     .getByText("Reconnecting", { exact: true })
     .waitFor();
-  await launch("host");
+  const restored = await launch("host");
+  assert.equal(
+    await restored.w.locator("html").getAttribute("data-theme"),
+    themes.at(-1),
+  );
   await g.w
     .locator("#status")
     .getByText("Connected", { exact: true })
@@ -130,7 +226,9 @@ try {
   await g.w.getByRole("heading", { name: "Room directory" }).waitFor();
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: two desktop processes, invitation, presence, chat, verified file, creator departure, host restart, automatic reconnect and leave. No renderer exceptions.",
+    "PASS: two desktops, server controls, themes, copy hover, private website, verified file, host restart and reconnect. Transport: " +
+      (wire ? "wired " + wire : "loopback") +
+      ".",
   );
 } finally {
   for (const app of apps.reverse()) await app.close().catch(() => {});

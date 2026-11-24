@@ -65,6 +65,7 @@ class RoomConnection {
       keepAlive: true,
       maxSockets: 12,
       minVersion: "TLSv1.2",
+      ...(server.localAddress ? { localAddress: server.localAddress } : {}),
       ...(this.ca ? { ca: this.ca } : {}),
     });
   }

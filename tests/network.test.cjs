@@ -13,6 +13,25 @@ const {
   parseInvite,
 } = require("../desktop/network.cjs");
 const { Transfers, hashFile, localName } = require("../desktop/transfers.cjs");
+const { macPorts, withAddresses } = require("../desktop/ethernet.cjs");
+test("Ethernet adapters retain their own IPv4 addresses, including direct-cable addresses", () => {
+  const report =
+    "Hardware Port: Wi-Fi\nDevice: en0\n\nHardware Port: USB 10/100/1000 LAN\nDevice: en4\n\nHardware Port: Ethernet\nDevice: en5\n\nHardware Port: Thunderbolt Bridge\nDevice: bridge0";
+  const adapters = withAddresses(macPorts(report), {
+    en0: [{ family: "IPv4", address: "10.0.0.2" }],
+    en4: [
+      { family: "IPv4", address: "169.254.10.2" },
+      { family: "IPv6", address: "::1" },
+    ],
+  });
+  assert.deepEqual(
+    adapters.map((a) => [a.device, a.addresses]),
+    [
+      ["en4", ["169.254.10.2"]],
+      ["en5", []],
+    ],
+  );
+});
 const hash = (x) => createHash("sha256").update(x).digest("hex"),
   key = () => randomBytes(16).toString("hex");
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -119,6 +138,40 @@ test(
           json: { Invite: room.Invite, Display: "Guest" },
         });
         guest = connect(peer.Token);
+        const site = path.join(dir, "website");
+        await fs.mkdir(site);
+        await fs.writeFile(
+          path.join(site, "index.html"),
+          "<h1>Build preview</h1>",
+        );
+        await fs.writeFile(path.join(site, ".private.json"), "{}");
+        await assert.rejects(
+          guest.request("PUT", base + "/site", { json: { Folder: site } }),
+          { status: 403 },
+        );
+        await adminClient.request("PUT", base + "/site", {
+          json: { Folder: site },
+        });
+        assert.equal((await guest.request("GET", base + "/state")).Site, true);
+        assert.equal(
+          (
+            await guest.request("GET", base + "/site/", { binary: true })
+          ).data.toString(),
+          "<h1>Build preview</h1>",
+        );
+        await assert.rejects(connect().request("GET", base + "/site/"), {
+          status: 403,
+        });
+        await assert.rejects(
+          guest.request("GET", base + "/site/.private.json"),
+          { status: 404 },
+        );
+        await adminClient.request("PUT", base + "/site", {
+          json: { Folder: "" },
+        });
+        await assert.rejects(guest.request("GET", base + "/site/"), {
+          status: 404,
+        });
         await assert.rejects(
           guest.request("GET", "/rooms/" + other.Room + "/state"),
           { status: 403 },

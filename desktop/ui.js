@@ -8,7 +8,9 @@ let state,
   draftKey = "",
   lastDraft = "",
   lastRoom = "",
-  lastChat = "";
+  lastChat = "",
+  wiredSignature = "",
+  modalAddress = "";
 function el(tag, text, cls) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
@@ -84,6 +86,7 @@ function nav(p) {
   }
   $("crumb").textContent = {
     rooms: "Rooms",
+    ethernet: "Ethernet",
     transfers: "Transfers",
     activity: "Activity",
     settings: "Settings",
@@ -133,6 +136,45 @@ function jobList(jobs) {
 function render(s) {
   state = s;
   const r = s.room;
+  const portsKey = JSON.stringify([s.ethernet, s.ethernetError]);
+  if (portsKey !== wiredSignature) {
+    wiredSignature = portsKey;
+    const ports = (s.ethernet || []).flatMap((port) =>
+      port.addresses.length
+        ? port.addresses.map((address) =>
+            row(
+              port.name,
+              address,
+              button("Create wired room", () => openModal("create", address)),
+              button("Join wired room", () => openModal("join", address)),
+            ),
+          )
+        : [row(port.name, "Cable connected · Waiting for an IPv4 address")],
+    );
+    $("wired-ports").replaceChildren(
+      ...(ports.length
+        ? ports
+        : [
+            empty(
+              s.ethernetError
+                ? "Adapter status unavailable"
+                : s.ethernet
+                  ? "No Ethernet connection"
+                  : "Checking wired adapters…",
+              "Connect an Ethernet cable to your router, switch or teammate’s computer.",
+              "⇄",
+            ),
+          ]),
+    );
+  }
+  $("host-status").textContent = s.hostStopping
+    ? "Stopping…"
+    : s.hostPort
+      ? "Listening on port " + s.hostPort
+      : "Stopped";
+  $("host-start").hidden = !!s.hostPort;
+  $("host-stop").hidden = !s.hostPort;
+  $("host-stop").disabled = s.hostStopping;
   $("directory").hidden = !!r;
   $("room").hidden = !r;
   $("version").textContent = "Version " + s.version;
@@ -198,6 +240,15 @@ function render(s) {
   $("room-name").textContent = r.Name;
   $("room-id").textContent = "ID " + r.Room;
   $("status").textContent = s.connection;
+  $("wired-status").hidden = !s.wired;
+  $("wired-status").textContent = s.wired ? "Ethernet · " + s.wired : "";
+  $("site-panel").hidden = !s.hosted && !r.Site;
+  $("site-share").hidden = !s.hosted || r.Site;
+  $("site-stop").hidden = !s.hosted || !r.Site;
+  $("site-open").hidden = !r.Site;
+  $("site-status").textContent = r.Site
+    ? "Available to members of this room."
+    : "Share a static website with this room. Choose its published folder containing index.html.";
   const msgs = r.Events.filter((e) => e.Kind === "chat"),
     signature = r.Room + ":" + (msgs.at(-1)?.Seq || 0);
   if (signature !== lastChat) {
@@ -208,11 +259,20 @@ function render(s) {
       ...(msgs.length
         ? msgs.map((m) => {
             const item = el("div", undefined, "message");
-            item.append(
-              el("b", m.Sender),
-              el("time", time(m.Time)),
-              el("p", m.Text),
-            );
+            const line = el("p"),
+              group = el("span", undefined, "copy-group");
+            const words = el("span", m.Text, "message-text");
+            const copy = button("Copy", async () => {
+              await api.copyMessage(m.Seq);
+              notify("Message copied.");
+            });
+            copy.className = "message-copy";
+            copy.setAttribute("aria-label", "Copy message");
+            words.onpointerenter = () => group.classList.add("show-copy");
+            group.onpointerleave = () => group.classList.remove("show-copy");
+            group.append(words, copy);
+            line.append(group);
+            item.append(el("b", m.Sender), el("time", time(m.Time)), line);
             return item;
           })
         : [el("p", "No messages yet.", "quiet")]),
@@ -268,8 +328,9 @@ function field(name, label, type = "text", value = "") {
   l.append(i);
   return l;
 }
-function openModal(type) {
+function openModal(type, address = "") {
   modalType = type;
+  modalAddress = address;
   $("form-error").textContent = "";
   const f = $("fields");
   f.replaceChildren();
@@ -277,6 +338,7 @@ function openModal(type) {
     create: "Create room",
     join: "Join room",
     leave: "Leave room",
+    stopHost: "Stop server",
   };
   $("modal-title").textContent = titles[type].toUpperCase();
   $("submit").textContent = titles[type];
@@ -292,10 +354,14 @@ function openModal(type) {
     const det = el("details");
     det.append(
       el("summary", "Use a standalone server"),
+      el(
+        "p",
+        "Use an existing HTTPS room server and its creation key. The room stays online when you close this app.",
+      ),
       field("origin", "HTTPS server address", "url"),
       field("admin", "Server creation key", "password"),
     );
-    if (state.ips.length > 1) {
+    if (!address && state.ips.length > 1) {
       const label = el("label", "Host network address"),
         select = el("select");
       select.name = "lan";
@@ -310,7 +376,7 @@ function openModal(type) {
       label.append(select);
       f.append(label);
     }
-    f.append(det);
+    if (!address) f.append(det);
   } else if (type === "join") {
     f.append(
       field("invite", "Room invitation", "textarea"),
@@ -320,6 +386,13 @@ function openModal(type) {
         "Join only through an invitation you trust. A LAN invitation also identifies the host certificate.",
       ),
     );
+  } else if (type === "stopHost") {
+    f.append(
+      el(
+        "p",
+        "Stopping disconnects everyone in rooms hosted here and ends website sharing. Start the server again to reopen unexpired rooms.",
+      ),
+    );
   } else
     f.append(
       el(
@@ -327,6 +400,7 @@ function openModal(type) {
         "Leaving revokes this membership and cancels its unfinished transfers. Use Room directory to return later with your membership.",
       ),
     );
+  if (address) f.append(el("p", "Ethernet adapter · " + address));
   f.querySelectorAll('[name="name"],[name="display"],[name="invite"]').forEach(
     (i) => (i.required = true),
   );
@@ -341,8 +415,10 @@ $("modal-form").onsubmit = async (e) => {
   const b = $("submit");
   b.disabled = true;
   const d = Object.fromEntries(new FormData(e.target));
+  if (modalAddress) d.wired = modalAddress;
   try {
     await api[modalType](d);
+    if (modalType === "create" || modalType === "join") nav("rooms");
     $("modal").close();
     render(await api.state());
   } catch (err) {
@@ -362,6 +438,23 @@ $("pick").onclick = () => run(() => api.send());
 $("folder").onclick = () => run(() => api.folder());
 $("parallel").onchange = () =>
   run(() => api.parallel(Number($("parallel").value)));
+$("host-start").onclick = () => run(() => api.startHost());
+$("host-stop").onclick = () => openModal("stopHost");
+$("site-share").onclick = () => run(() => api.shareSite());
+$("site-stop").onclick = () => run(() => api.stopSite());
+$("site-open").onclick = () => run(() => api.openSite());
+function applyTheme(value) {
+  const select = $("theme");
+  select.value = value;
+  if (!select.value) select.value = "original";
+  document.documentElement.dataset.theme = select.value;
+  drawGlobe();
+}
+applyTheme(localStorage.getItem("desktop-theme") || "original");
+$("theme").onchange = () => {
+  applyTheme($("theme").value);
+  localStorage.setItem("desktop-theme", $("theme").value);
+};
 $("chat-form").onsubmit = async (e) => {
   e.preventDefault();
   const input = $("chat-text"),
@@ -407,10 +500,12 @@ function drawGlobe() {
   c.height = h * d;
   const g = c.getContext("2d");
   g.scale(d, d);
-  g.fillStyle = "#101610";
+  const style = getComputedStyle(c);
+  const color = (key) => style.getPropertyValue(key).trim();
+  g.fillStyle = color("--screen");
   g.fillRect(0, 0, w, h);
   g.lineWidth = 0.5;
-  g.strokeStyle = "#253426";
+  g.strokeStyle = color("--grid");
   for (let x = 0; x < w; x += 22) {
     g.beginPath();
     g.moveTo(x, 0);
@@ -459,15 +554,15 @@ function drawGlobe() {
     const pts = [];
     for (let t = 0; t <= 128; t++)
       pts.push(proj((k * Math.PI) / 18, (t * tau) / 128));
-    curve(pts, "#9fed50");
+    curve(pts, color("--green"));
   }
   for (let k = 0; k < 36; k++) {
     const pts = [];
     for (let t = 0; t <= 64; t++)
       pts.push(proj(-Math.PI / 2 + (Math.PI * t) / 64, (k * tau) / 36));
-    curve(pts, "#a0ef4c");
+    curve(pts, color("--green"));
   }
-  g.strokeStyle = "#c1ff68";
+  g.strokeStyle = color("--green");
   g.beginPath();
   g.arc(cx, cy, rad, 0, tau);
   g.stroke();

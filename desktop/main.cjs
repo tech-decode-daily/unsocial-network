@@ -23,6 +23,8 @@ const {
   endpoint,
 } = require("./network.cjs");
 const { Transfers, publicJob } = require("./transfers.cjs");
+const { ethernet } = require("./ethernet.cjs");
+const { openSite } = require("./site-viewer.cjs");
 app.setName("Unsocial Network");
 if (process.env.UNSOCIAL_PROFILE)
   app.setPath("userData", path.resolve(process.env.UNSOCIAL_PROFILE));
@@ -40,6 +42,12 @@ function start() {
     queue,
     hostPromise,
     hostProcess,
+    hostPort,
+    stopping = false,
+    ethernetTimer,
+    ethernetPorts = null,
+    ethernetError = false,
+    siteWindow,
     active,
     socket,
     reconnect,
@@ -82,6 +90,33 @@ function start() {
       .filter((a) => a && a.family === "IPv4" && !a.internal)
       .map((a) => a.address);
   }
+  async function refreshEthernet() {
+    let ports;
+    try {
+      ports = await ethernet();
+    } catch {
+      ports = null;
+    }
+    if (
+      JSON.stringify(ports) !== JSON.stringify(ethernetPorts) ||
+      ethernetError !== (ports === null)
+    ) {
+      ethernetPorts = ports;
+      ethernetError = ports === null;
+      notify();
+    }
+    if (!quitting) ethernetTimer = setTimeout(refreshEthernet, 5500);
+  }
+  function wiredAddress(address) {
+    if (
+      !ethernetPorts?.some((port) => port.addresses.includes(address)) ||
+      !localIPs().includes(address)
+    )
+      throw Error(
+        "Ethernet address is unavailable. Check the cable and try again.",
+      );
+    return address;
+  }
   function state() {
     return {
       version: app.getVersion(),
@@ -102,6 +137,12 @@ function start() {
       jobs: data.jobs.map(publicJob),
       activity,
       ips: localIPs(),
+      ethernet: ethernetPorts,
+      ethernetError,
+      hostPort,
+      hostStopping: stopping,
+      hosted: !!active?.hosted,
+      wired: active?.localAddress,
     };
   }
   function notify() {
@@ -122,6 +163,8 @@ function start() {
     return { ...m, conn };
   }
   function detach() {
+    if (siteWindow && !siteWindow.isDestroyed()) siteWindow.destroy();
+    siteWindow = null;
     clearTimeout(reconnect);
     if (socket) {
       socket.removeAllListeners();
@@ -193,6 +236,9 @@ function start() {
       try {
         const frame = JSON.parse(raw);
         roomView.Members = frame.Members;
+        roomView.Site = !!frame.Site;
+        if (!roomView.Site && siteWindow && !siteWindow.isDestroyed())
+          siteWindow.destroy();
         for (const ev of frame.Events) {
           if (ev.Seq <= roomView.Cursor) continue;
           roomView.Events.push(ev);
@@ -254,7 +300,10 @@ function start() {
     await loadRoom(id);
   }
   async function host() {
+    if (stopping)
+      throw Error("The local server is stopping. Try again in a moment.");
     if (hostPromise) return hostPromise;
+    fs.rmSync(path.join(profile, "host-paused"), { force: true });
     const token = randomBytes(32).toString("hex");
     const bin = "unsocial-room" + (process.platform === "win32" ? ".exe" : "");
     const packaged = path.join(app.getAppPath(), "bin", bin);
@@ -300,6 +349,7 @@ function start() {
         clearTimeout(timer);
         try {
           const config = JSON.parse(line);
+          hostPort = config.port;
           log("Local room server is listening.");
           resolve({ ...config, token });
         } catch {
@@ -310,6 +360,7 @@ function start() {
         clearTimeout(timer);
         hostPromise = null;
         hostProcess = null;
+        hostPort = null;
         reject(
           Error(
             "Room host could not start. Check disk space and the saved port.",
@@ -320,6 +371,41 @@ function start() {
     });
     return hostPromise;
   }
+  async function stopHost() {
+    const child = hostProcess;
+    if (!child || stopping) return;
+    stopping = true;
+    notify();
+    try {
+      fs.writeFileSync(path.join(profile, "host-paused"), "");
+      const done = new Promise((resolve) => child.once("exit", resolve));
+      const timer = setTimeout(() => child.kill(), 5000);
+      try {
+        child.stdin.end();
+        await done;
+      } finally {
+        clearTimeout(timer);
+      }
+    } finally {
+      stopping = false;
+      notify();
+    }
+  }
+  async function setSite(room, folder) {
+    if (!room?.hosted) throw Error("Choose a room hosted on this desktop.");
+    const config = await host();
+    const admin = new RoomConnection(
+      { ...config, origin: "https://127.0.0.1:" + config.port },
+      config.token,
+    );
+    try {
+      await admin.request("PUT", "/rooms/" + room.Room + "/site", {
+        json: { Folder: folder },
+      });
+    } finally {
+      admin.close();
+    }
+  }
   async function establish(input, join) {
     if (switching) throw Error("A room connection is already being opened.");
     switching = true;
@@ -328,19 +414,24 @@ function start() {
       const display = String(input.display || "").trim();
       if (!display || display.length > 80)
         throw Error("Enter your display name.");
+      const localAddress = input.wired ? wiredAddress(input.wired) : undefined;
       const server = join
         ? parseInvite(input.invite)
         : input.origin
           ? { ...endpoint(input.origin), token: input.admin }
           : { ...(await host()) };
-      if (!join && !input.origin && input.lan) {
-        if (!localIPs().includes(input.lan))
+      const lan = localAddress || input.lan;
+      if (!join && !input.origin && lan) {
+        if (!localIPs().includes(lan))
           throw Error("Selected network address is unavailable.");
         const url = new URL(server.origin);
-        url.hostname = input.lan;
+        url.hostname = lan;
         server.origin = url.origin;
       }
-      conn = new RoomConnection(server, join ? "" : server.token);
+      conn = new RoomConnection(
+        { ...server, localAddress },
+        join ? "" : server.token,
+      );
       const result = join
         ? await conn.request("POST", "/rooms/" + server.room + "/join", {
             json: { Invite: server.key, Display: display },
@@ -361,6 +452,7 @@ function start() {
         ...result,
         ...endpoint(server.origin, server.ca),
         hosted: !join && !input.origin,
+        localAddress,
       });
       data.display = display;
       save();
@@ -375,6 +467,38 @@ function start() {
     switch (name) {
       case "state":
         return state();
+      case "startHost":
+        await host();
+        return;
+      case "stopHost":
+        return stopHost();
+      case "shareSite": {
+        const room = active;
+        if (!room?.hosted) throw Error("Open a room hosted here first.");
+        const result = await dialog.showOpenDialog(win, {
+          title: "Share a static website with this room",
+          properties: ["openDirectory"],
+        });
+        if (!result.canceled && active === room)
+          await setSite(room, result.filePaths[0]);
+        return;
+      }
+      case "stopSite":
+        return setSite(active, "");
+      case "openSite":
+        if (!active || !roomView?.Site)
+          throw Error("No website is running in this room.");
+        if (siteWindow && !siteWindow.isDestroyed()) siteWindow.focus();
+        else siteWindow = openSite(active, win);
+        return;
+      case "copyMessage": {
+        const message = roomView?.Events.find(
+          (e) => e.Seq === payload && e.Kind === "chat",
+        );
+        if (!message) throw Error("Message is unavailable.");
+        clipboard.writeText(message.Text);
+        return;
+      }
       case "create":
         return establish(payload, false);
       case "join": {
@@ -386,7 +510,17 @@ function start() {
             r.Invite === inv.key &&
             r.ca === inv.ca,
         );
-        return known ? enter(known.Room) : establish(payload, true);
+        if (!known) return establish(payload, true);
+        if (
+          payload.wired &&
+          known.localAddress !== wiredAddress(payload.wired)
+        ) {
+          known.localAddress = payload.wired;
+          streams.get(known.Room)?.close();
+          streams.delete(known.Room);
+          save();
+        }
+        return enter(known.Room);
       }
       case "enter":
         return enter(payload);
@@ -408,6 +542,7 @@ function start() {
       case "leave": {
         if (!active) return;
         const s = active;
+        if (s.hosted && roomView?.Site) await setSite(s, "");
         await s.conn.request("POST", "/rooms/" + s.Room + "/leave");
         await queue.pauseRoom(s.Room);
         detach();
@@ -540,6 +675,7 @@ function start() {
         },
       });
       const wc = win.webContents;
+      refreshEthernet();
       wc.setWindowOpenHandler(() => ({ action: "deny" }));
       wc.on("will-navigate", (e) => e.preventDefault());
       wc.session.setPermissionRequestHandler((_w, _p, cb) => cb(false));
@@ -560,7 +696,10 @@ function start() {
         );
       await win.loadFile(home);
       // Other members may still be using a room its creator has left.
-      if (fs.existsSync(path.join(profile, "host", "rooms.db")))
+      if (
+        !fs.existsSync(path.join(profile, "host-paused")) &&
+        fs.existsSync(path.join(profile, "host", "rooms.db"))
+      )
         host().catch((e) => log(e.message));
     })
     .catch((e) => {
@@ -579,6 +718,7 @@ function start() {
     e.preventDefault();
     if (quitting) return;
     quitting = true;
+    clearTimeout(ethernetTimer);
     (async () => {
       detach();
       await queue?.shutdown();

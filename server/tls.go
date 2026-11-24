@@ -13,12 +13,14 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
 func serial() (*big.Int, error) { return rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 126)) }
 func hostIPs() []net.IP {
 	out := []net.IP{}
+	var linkLocal []net.IP
 	ifs, _ := net.Interfaces()
 	for _, n := range ifs {
 		if n.Flags&net.FlagUp == 0 || n.Flags&net.FlagLoopback != 0 {
@@ -27,12 +29,43 @@ func hostIPs() []net.IP {
 		addrs, _ := n.Addrs()
 		for _, a := range addrs {
 			ip, _, e := net.ParseCIDR(a.String())
-			if e == nil && ip.To4() != nil && !ip.IsLinkLocalUnicast() {
-				out = append(out, ip)
+			if e == nil && ip.To4() != nil {
+				if ip.IsLinkLocalUnicast() {
+					linkLocal = append(linkLocal, ip)
+				} else {
+					out = append(out, ip)
+				}
 			}
 		}
 	}
-	return append(out, net.ParseIP("127.0.0.1"), net.IPv6loopback)
+	return append(append(out, linkLocal...), net.ParseIP("127.0.0.1"), net.IPv6loopback)
+}
+
+// A cable can be connected after the room starts. Certify the local socket
+// address using the same CA that existing room invitations already trust.
+func hostTLS(dir string, ips []net.IP) (*tls.Config, string, error) {
+	cert, ca, err := identity(dir, ips)
+	if err != nil {
+		return nil, "", err
+	}
+	var mu sync.Mutex
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
+	cfg.GetCertificate = func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		addr := hello.Conn.LocalAddr().(*net.TCPAddr).IP
+		mu.Lock()
+		defer mu.Unlock()
+		if cert.Leaf.VerifyHostname(addr.String()) != nil || time.Until(cert.Leaf.NotAfter) < time.Hour {
+			currentIPs := append(hostIPs(), ips...)
+			next, _, err := identity(dir, append(currentIPs, addr))
+			if err != nil {
+				return nil, err
+			}
+			cert = next
+		}
+		current := cert
+		return &current, nil
+	}
+	return cfg, ca, nil
 }
 func identity(dir string, ips []net.IP) (tls.Certificate, string, error) {
 	var empty tls.Certificate
@@ -105,5 +138,9 @@ func identity(dir string, ips []net.IP) (tls.Certificate, string, error) {
 	if e != nil {
 		return empty, "", e
 	}
-	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: leaf}, string(pem.EncodeToMemory(cert)), nil
+	parsed, e := x509.ParseCertificate(der)
+	if e != nil {
+		return empty, "", e
+	}
+	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: leaf, Leaf: parsed}, string(pem.EncodeToMemory(cert)), nil
 }

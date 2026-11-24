@@ -1,7 +1,10 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
+	"net"
 	"net/http/httptest"
 	"os"
 	"testing"
@@ -9,6 +12,35 @@ import (
 
 	bolt "go.etcd.io/bbolt"
 )
+
+func TestNewAdapterKeepsInvitationCA(t *testing.T) {
+	cfg, ca, err := hostTLS(t.TempDir(), []net.IP{net.ParseIP("192.0.2.1")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := tls.Listen("tcp4", "127.0.0.1:0", cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	go func() {
+		c, err := listener.Accept()
+		if err == nil {
+			defer c.Close()
+			c.SetDeadline(time.Now().Add(5 * time.Second))
+			c.(*tls.Conn).Handshake()
+		}
+	}()
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM([]byte(ca)) {
+		t.Fatal("missing invitation CA")
+	}
+	conn, err := tls.Dial("tcp", listener.Addr().String(), &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12})
+	if err != nil {
+		t.Fatal(err)
+	}
+	conn.Close()
+}
 
 func TestStorageReserveAndRelease(t *testing.T) {
 	s, e := openService(t.TempDir(), secret(32), time.Hour)

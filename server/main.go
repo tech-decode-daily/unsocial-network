@@ -46,6 +46,7 @@ func run() error {
 		return errors.New("auth-rate must be positive")
 	}
 	s.minFree = *minFree
+	s.desktop = *desktop
 	s.attempts = *attempts
 	if e = s.sweep(); e != nil {
 		return e
@@ -89,12 +90,11 @@ func run() error {
 	_, port, _ := net.SplitHostPort(l.Addr().String())
 	ca := ""
 	if origin == "" {
-		var cert tls.Certificate
-		cert, ca, e = identity(*dir, ips)
+		var cfg *tls.Config
+		cfg, ca, e = hostTLS(*dir, ips)
 		if e != nil {
 			return e
 		}
-		cfg := &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
 		l = tls.NewListener(l, cfg)
 		origin = "https://" + net.JoinHostPort(ip.String(), port)
 		if *bind == "" {

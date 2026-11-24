@@ -57,6 +57,8 @@ type rate struct {
 	until time.Time
 }
 type service struct {
+	desktop           bool
+	sites             map[string]*os.Root
 	db                *bolt.DB
 	dir, admin        string
 	ttl               time.Duration
@@ -82,7 +84,7 @@ func openService(dir, admin string, ttl time.Duration) (*service, error) {
 		db.Close()
 		return nil, err
 	}
-	return &service{db: db, dir: dir, admin: admin, ttl: ttl, minFree: 64 << 20, attempts: 90, online: map[string]map[string]int{}, signals: map[string]chan struct{}{}, rates: map[string]rate{}}, nil
+	return &service{db: db, dir: dir, admin: admin, ttl: ttl, minFree: 64 << 20, attempts: 90, sites: map[string]*os.Root{}, online: map[string]map[string]int{}, signals: map[string]chan struct{}{}, rates: map[string]rate{}}, nil
 }
 
 // Account for independent chunk writers before admitting another disk write.
@@ -267,6 +269,7 @@ func (s *service) sweep() error {
 		return e
 	}
 	for _, id := range expired {
+		s.replaceSite(id, nil)
 		s.wake(id)
 	}
 	// A crash between metadata removal and unlinking is recovered by the next sweep.

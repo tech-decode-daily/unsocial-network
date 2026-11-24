@@ -19,6 +19,14 @@ These are unsigned release candidates. Windows may show a publisher warning and 
 
 ## Hosting and recovery
 
+**Ethernet.** Connect the computers to the same wired LAN, or connect them directly and give each an IPv4 address on the same subnet. Open **Ethernet** and choose **Create wired room** beside the intended adapter. Share the invitation privately. On the other desktop, use **Join wired room** beside its adapter. Messages and files use this wired address. No internet connection is required.
+
+**Local room server.** Creating a local room starts the included service. You can also start or stop it in **Settings → Local room server**. Stopping the service disconnects its rooms. Restarting it reopens rooms that have not expired.
+
+**Room website.** In a room hosted on your desktop, select **Choose website folder** and choose the published site folder containing `index.html`. Members select **Open website** to view it inside the app. The host serves static HTML, scripts, styles, JSON, images, fonts and media over the room’s authenticated HTTPS connection. Choose a distribution folder containing only assets meant for the room. The preview supports local assets and links. External resources and backend runtimes are unsupported. Saved edits appear on reload. **Stop sharing**, leaving as the host, and stopping the server each end website sharing. Sharing a folder again requires selecting it again.
+
+**Appearance and chat.** Choose from eight themes in **Settings → Desktop theme**. Hover over the text of a message or Tab to its **Copy** button to copy the message.
+
 By default a room runs on its creator's desktop for 24 hours from creation. Participants need a network route to the address in the invitation. Allow the room host through the firewall on the intended private network. An invitation contains its access secret and, for a desktop host, the host's public CA certificate. Anyone who obtains it can join. The host can read shared content.
 
 Keep the hosting app running. Its directory button closes the room view while the host service continues. A host restart on the same network address and saved port restores unexpired rooms and files. A standalone HTTPS server supports internet rooms and operates independently of the creator. See DEPLOYMENT.md in the source tree. No hosted service subscription is included.

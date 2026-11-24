@@ -1,6 +1,6 @@
 {
   "name": "unsocial-network",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Private desktop rooms for file exchange and chat",
   "private": true,
   "main": "desktop/main.cjs",

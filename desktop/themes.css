@@ -1,0 +1,270 @@
+:root {
+  --screen: #101610;
+  --grid: #253426;
+  --focus: #f65fc5;
+}
+.setting select,
+.form-body select {
+  background: var(--white);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font: inherit;
+  padding: 7px 10px;
+  max-width: 100%;
+}
+select:focus-visible,
+.message-copy:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.row > div:first-child {
+  flex: 1;
+}
+.message-copy {
+  display: inline-block;
+  opacity: 0;
+  pointer-events: none;
+  margin: 0;
+  padding: 2px 6px 2px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--green);
+  font: 11px var(--mono);
+  text-decoration: underline;
+  vertical-align: baseline;
+}
+.show-copy .message-copy,
+.message-copy:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+#site-panel .setting {
+  flex-wrap: wrap;
+}
+.room-meta {
+  flex-wrap: wrap;
+}
+:root[data-theme="platinum"] {
+  --paper: #d6d6d6;
+  --white: #f3f3f3;
+  --ink: #161616;
+  --blue: #3c427c;
+  --line: #999;
+  --green: #d9d9ff;
+  --screen: #282936;
+  --grid: #434552;
+  font-family: Geneva, Verdana, sans-serif;
+}
+[data-theme="platinum"] :is(.bar, .panel-head) {
+  color: #151515;
+  background: repeating-linear-gradient(
+    #e5e5e5 0 2px,
+    #aaa 2px 3px,
+    #ececec 3px 5px
+  );
+}
+[data-theme="platinum"] :is(.bar > span, .panel-head h2) {
+  background: #e5e5e5;
+  padding-inline: 5px;
+}
+[data-theme="platinum"] :is(.solid, .light, .neon, .outline) {
+  border-radius: 5px;
+  box-shadow:
+    inset 1px 1px #fff9,
+    inset -1px -1px #0005;
+}
+[data-theme="platinum"] .close {
+  background: #505050;
+}
+:root[data-theme="motif"] {
+  --paper: #84969d;
+  --white: #ccd0c8;
+  --ink: #171f22;
+  --blue: #42496c;
+  --line: #747c80;
+  --green: #ffe19a;
+  --screen: #18252a;
+  --grid: #364546;
+  font-family: Helvetica, Arial, sans-serif;
+}
+[data-theme="motif"]
+  :is(.hero, .panel, .console, dialog, .solid, .light, .bar) {
+  border: 3px outset #acb4b5;
+  border-radius: 0;
+}
+[data-theme="motif"] :is(.chat #messages, input, select) {
+  border: 2px inset #adb3ac;
+}
+[data-theme="motif"] :is(.hero-copy h2, .heading h1) {
+  font-family: var(--mono);
+  letter-spacing: -0.08em;
+}
+:root[data-theme="amber"] {
+  color-scheme: dark;
+  --paper: #17130e;
+  --white: #221b11;
+  --ink: #ffd99b;
+  --blue: #724a18;
+  --line: #69512d;
+  --green: #ffcc73;
+  --screen: #100e08;
+  --grid: #392c16;
+  font-family: var(--mono);
+}
+[data-theme="amber"] main {
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent 0 3px,
+    #ffcc7308 3px 4px
+  );
+  background-size: auto;
+}
+[data-theme="amber"] :is(.heading h1, .hero-copy h2, .panel h2) {
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: -0.05em;
+}
+[data-theme="amber"] .panel-head {
+  border-bottom: 1px dashed var(--line);
+}
+:root[data-theme="blueprint"] {
+  --paper: #d8e9ee;
+  --white: #f1f9fa;
+  --ink: #142e45;
+  --blue: #175079;
+  --line: #94b4c3;
+  --green: #a7eaff;
+  --screen: #102f49;
+  --grid: #24516c;
+}
+[data-theme="blueprint"] main {
+  background-image:
+    linear-gradient(#79acbd44 1px, transparent 1px),
+    linear-gradient(90deg, #79acbd44 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+[data-theme="blueprint"] :is(.bar, .panel h2, .heading h1) {
+  font-family: var(--mono);
+}
+[data-theme="blueprint"] .panel-head {
+  border-top: 3px double var(--blue);
+}
+:root[data-theme="paper"] {
+  --paper: #f0e6d4;
+  --white: #fff9eb;
+  --ink: #332820;
+  --blue: #83381f;
+  --line: #b8a58b;
+  --green: #f8cf92;
+  --screen: #302820;
+  --grid: #4f4336;
+  font-family: Georgia, "Times New Roman", serif;
+}
+[data-theme="paper"] :is(.heading h1, .hero-copy h2, .panel h2) {
+  font-family: Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+[data-theme="paper"] .panel-head {
+  border-block: 3px double var(--line);
+}
+[data-theme="paper"] .bar {
+  letter-spacing: 0.2em;
+}
+:root[data-theme="jade"] {
+  --paper: #d8eae1;
+  --white: #f8fffb;
+  --ink: #17382f;
+  --blue: #215f50;
+  --line: #a2c5b8;
+  --green: #a4f3ce;
+  --screen: #153b35;
+  --grid: #30564b;
+}
+[data-theme="jade"] :is(.hero, .panel, .console, dialog) {
+  border-radius: 18px;
+  overflow: hidden;
+}
+[data-theme="jade"] :is(.solid, .light, .neon, .outline, nav button) {
+  border-radius: 20px;
+}
+[data-theme="jade"] main {
+  background: linear-gradient(125deg, #eaf6e9, #badacf);
+}
+[data-theme="jade"] .bar {
+  background: linear-gradient(100deg, #215f50, #37746b);
+}
+:root[data-theme="midnight"] {
+  color-scheme: dark;
+  --paper: #171421;
+  --white: #282237;
+  --ink: #f6efff;
+  --blue: #634b97;
+  --line: #675777;
+  --green: #d7baff;
+  --screen: #181023;
+  --grid: #372948;
+}
+[data-theme="midnight"] :is(.hero, .panel, .console, dialog) {
+  border-radius: 9px;
+  overflow: hidden;
+}
+[data-theme="midnight"] .bar {
+  background: linear-gradient(100deg, #513780, #702f64);
+}
+[data-theme="midnight"] .panel-head {
+  border-inline-start: 4px solid #bd97f3;
+}
+[data-theme="midnight"] main {
+  background-image: radial-gradient(#4b3d59 0.7px, transparent 0.8px);
+}
+:root:not([data-theme="original"])[data-theme] {
+  --muted: color-mix(in srgb, var(--ink) 77%, var(--white));
+  --focus: color-mix(in srgb, var(--ink) 70%, var(--green));
+}
+[data-theme]:not([data-theme="original"]) :is(.rail, #drop) {
+  background: color-mix(in srgb, var(--paper) 75%, var(--white));
+  border-color: var(--line);
+}
+[data-theme]:not([data-theme="original"])
+  :is(
+    .rail-end span,
+    .empty p,
+    .empty .glyph,
+    .setting p,
+    .meta,
+    .code,
+    .room-meta,
+    #drop,
+    footer,
+    .form-body p
+  ) {
+  color: var(--muted);
+}
+[data-theme]:not([data-theme="original"]) :is(.row, .setting, .solid) {
+  border-color: var(--line);
+}
+[data-theme]:not([data-theme="original"]) :is(input, textarea) {
+  color: var(--ink);
+  background: var(--white);
+  border-color: var(--line);
+}
+[data-theme]:not([data-theme="original"])
+  :is(.chat #messages, .console, .hero-body, .outline) {
+  background: var(--screen);
+}
+[data-theme]:not([data-theme="original"]) nav button:not(.on):hover {
+  background: var(--white);
+}
+[data-theme]:not([data-theme="original"]) .neon:hover {
+  background: color-mix(in srgb, var(--green) 75%, white);
+}
+[data-theme]:not([data-theme="original"]) :is(.hero, .panel, .console) {
+  box-shadow: 2px 3px 0 color-mix(in srgb, var(--ink) 33%, transparent);
+}
+:is([data-theme="amber"], [data-theme="midnight"]) .back {
+  color: var(--green);
+}
+:is([data-theme="amber"], [data-theme="midnight"]) :is(.error, #form-error) {
+  color: #ffaabc;
+}

@@ -9,6 +9,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Unsocial Network</title>
     <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="themes.css" />
     <script defer src="ui.js"></script>
   </head>
   <body>
@@ -22,6 +23,7 @@
       </div>
       <nav aria-label="Workspace">
         <button data-nav="rooms"><i>▦</i> Rooms</button
+        ><button data-nav="ethernet"><i>⇄</i> Ethernet</button
         ><button data-nav="transfers">
           <i>⇅</i> Transfers <small id="job-count"></small></button
         ><button data-nav="activity"><i>›_</i> Activity</button
@@ -72,7 +74,8 @@
               <button class="back" id="back">← Room directory</button>
               <h1 id="room-name"></h1>
               <div class="room-meta">
-                <span id="room-id"></span><span id="status"></span>
+                <span id="room-id"></span><span id="status"></span
+                ><span id="wired-status" hidden></span>
               </div>
             </div>
             <div class="actions">
@@ -113,7 +116,27 @@
             <div class="panel-head"><h2>Room transfers</h2></div>
             <div id="room-jobs"></div>
           </section>
+          <section class="panel" id="site-panel" hidden>
+            <div class="panel-head"><h2>Room website</h2></div>
+            <div class="setting">
+              <p id="site-status"></p>
+              <div class="actions">
+                <button class="light" id="site-share">
+                  Choose website folder
+                </button>
+                <button class="solid" id="site-open">Open website</button>
+                <button class="light" id="site-stop">Stop sharing</button>
+              </div>
+            </div>
+          </section>
         </div>
+      </section>
+      <section id="ethernet" class="view" hidden>
+        <div class="heading"><h1>Ethernet connections</h1></div>
+        <section class="panel">
+          <div class="panel-head"><h2>Wired adapters</h2></div>
+          <div id="wired-ports" aria-live="polite"></div>
+        </section>
       </section>
       <section id="transfers" class="view" hidden>
         <div class="heading"><h1>Transfer queue</h1></div>
@@ -133,6 +156,38 @@
       </section>
       <section id="settings" class="view" hidden>
         <div class="heading"><h1>Settings</h1></div>
+        <section class="panel">
+          <div class="panel-head"><h2>Appearance</h2></div>
+          <label class="setting"
+            ><b>Desktop theme</b
+            ><select id="theme">
+              <option value="original">Original terminal</option>
+              <option value="platinum">1990s Macintosh</option>
+              <option value="motif">Early Linux workstation</option>
+              <option value="amber">Amber terminal</option>
+              <option value="blueprint">Blueprint</option>
+              <option value="paper">Letterpress</option>
+              <option value="jade">Jade glass</option>
+              <option value="midnight">Midnight violet</option>
+            </select></label
+          >
+        </section>
+        <section class="panel">
+          <div class="panel-head"><h2>Local room server</h2></div>
+          <div class="setting">
+            <div>
+              <b id="host-status">Stopped</b>
+              <p>
+                Hosts invited teammates’ chat, files and room websites while
+                this desktop is open.
+              </p>
+            </div>
+            <div class="actions">
+              <button class="light" id="host-start">Start server</button
+              ><button class="light" id="host-stop" hidden>Stop server</button>
+            </div>
+          </div>
+        </section>
         <section class="panel">
           <div class="panel-head"><h2>File transfers</h2></div>
           <div class="setting">

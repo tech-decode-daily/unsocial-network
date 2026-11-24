@@ -2,6 +2,12 @@ const { contextBridge, ipcRenderer, webUtils } = require("electron");
 const call = (op, arg) => ipcRenderer.invoke("command", op, arg);
 contextBridge.exposeInMainWorld("network", {
   state: () => call("state"),
+  startHost: () => call("startHost"),
+  stopHost: () => call("stopHost"),
+  shareSite: () => call("shareSite"),
+  stopSite: () => call("stopSite"),
+  openSite: () => call("openSite"),
+  copyMessage: (seq) => call("copyMessage", seq),
   create: (d) => call("create", d),
   join: (d) => call("join", d),
   enter: (id) => call("enter", id),
