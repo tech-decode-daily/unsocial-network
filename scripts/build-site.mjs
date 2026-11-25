@@ -52,7 +52,8 @@ const systems = [
   },
   {
     id: "macos", title: "macOS",
-    instruction: "Open the downloaded package and follow Installer. It selects the right version for your Mac and puts Unsocial Network in Applications. Apple notarization is pending, so macOS may block installation.",
+    instruction: "Open the downloaded package and follow Installer. It selects the right version for your Mac and puts Unsocial Network in Applications." +
+      (["0.1.2", "0.1.3"].includes(version) ? " This version is unsigned and macOS may block installation." : ""),
     builds: [{ suffix: "macOS.pkg", label: "Download for Mac", detail: "Apple Silicon and Intel · PKG installer" }],
   },
   {

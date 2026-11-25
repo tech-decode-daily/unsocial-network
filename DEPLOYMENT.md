@@ -42,5 +42,17 @@ Select **GitHub Actions** as the repository's Pages source and push the release 
 
 For a local preview, download the four public packages and their SHA256SUMS.txt into `dist`, then run `npm run build:site`. Open `build/download-site/index.html` in a browser. `npm run test:site` exercises all platform downloads in Edge on Windows or Chrome on Linux and macOS. Set `UNSOCIAL_TEST_BROWSER` to select an installed Chromium executable.
 
-The candidate workflow distributes unsigned builds. A signed Windows release requires publisher credentials. A signed macOS release requires Apple Developer ID signing, notarization and stapling. Verify OS trust and clean-machine installation for the signed artifacts. [Electron signing guidance](https://www.electronjs.org/docs/latest/tutorial/code-signing)
+Windows signing requires separate publisher credentials. The published 0.1.2 and 0.1.3 Mac installers are unsigned. For subsequent release tags, the workflow signs the app and installer, submits the final package to Apple, staples the accepted ticket and checks Gatekeeper on Intel and Apple Silicon. Branch builds use ad hoc signatures for internal installation tests.
+
+The Apple Developer Program account holder creates a **Developer ID Application** certificate and a **Developer ID Installer** certificate. On the Mac holding their private keys, export both identities together from Keychain Access as one password-protected PKCS#12 file. Configure the following repository Actions secrets before tagging a new version. [Apple Developer ID](https://developer.apple.com/developer-id/)
+
+| Secret | Value |
+| --- | --- |
+| MAC_SIGNING_P12_BASE64 | Base64 of the exported PKCS#12 file, including both private keys |
+| MAC_SIGNING_P12_PASSWORD | Password protecting that export |
+| APPLE_TEAM_ID | Apple Developer team's ten-character ID |
+| APPLE_ID | Apple Account email authorized to notarize for that team |
+| APPLE_APP_PASSWORD | App-specific password for that account |
+
+The Mac runner imports the identities into a temporary keychain. Only the release build receives the secrets. The release job publishes the package after notarization, Gatekeeper assessment and installation tests succeed.
 
