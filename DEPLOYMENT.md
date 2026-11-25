@@ -56,3 +56,11 @@ The Apple Developer Program account holder creates a **Developer ID Application*
 
 The Mac runner imports the identities into a temporary keychain. Only the release build receives the secrets. The release job publishes the package after notarization, Gatekeeper assessment and installation tests succeed.
 
+### Microsoft Store installation
+
+The Windows Store package contains the native x64 app and its room server. In Partner Center, reserve the app name as an MSIX product. Copy the three values from **Product identity** into GitHub Actions repository variables named `STORE_IDENTITY_NAME` (Package/Identity/Name), `STORE_PUBLISHER` (Package/Identity/Publisher), and `STORE_PUBLISHER_DISPLAY_NAME` (Package/Properties/PublisherDisplayName). [Microsoft Store registration](https://learn.microsoft.com/windows/apps/publish/faq/get-started-with-the-microsoft-store)
+
+Run **Package and test the Windows Store app** on the intended release commit with the submission option selected. The workflow installs a test package on a disposable Windows runner and exercises the installed app. It then builds the submission package from the same application payload using the registered publisher identity. For app version 0.1.3 the MSIX version is 1.1.3.0. The first field is the app’s major version plus one, and the last field is reserved for the Store.
+
+Upload the MSIX from the `windows-store-submission` artifact to Partner Center and complete the listing and privacy declarations. Explain in the certification notes that the Electron desktop app uses the full-trust capability to start a bundled native room server and to read and write files users share. Microsoft signs the package after certification. Once the listing is public, set the repository variable `WINDOWS_STORE_PRODUCT_ID` to the public Store product ID and rerun **Publish download website**. The Windows button will open that listing. [Store signing](https://learn.microsoft.com/windows/apps/package-and-deploy/code-signing-options)
+

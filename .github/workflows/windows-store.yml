@@ -1,0 +1,74 @@
+name: Package and test the Windows Store app
+on:
+  push:
+    branches: [main]
+    paths: ['packaging/windows/store/**', '.github/workflows/windows-store.yml']
+  workflow_dispatch:
+    inputs:
+      submission:
+        description: Build a Partner Center submission using the repository's Store identity
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  store:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - run: npm ci
+      - run: npm run package -- win32 x64
+      - name: Build the MSIX with a test identity
+        run: ./packaging/windows/store/build.ps1 -TestBuild
+      - name: Install and exercise the package on the disposable runner
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $pkg = (Get-Item dist/*-Test.msix).FullName
+          $sdk = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/bin'
+          $sign = Get-ChildItem "$sdk/*/x64/signtool.exe" | Sort-Object { [version]$_.Directory.Parent.Name } -Descending | Select-Object -First 1
+          $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject 'CN=Unsocial Network Packaging Test' -CertStoreLocation Cert:\CurrentUser\My
+          $public = Join-Path $env:RUNNER_TEMP 'unsocial-test.cer'
+          try {
+            Export-Certificate -Cert $cert -FilePath $public | Out-Null
+            Import-Certificate -FilePath $public -CertStoreLocation Cert:\LocalMachine\TrustedPeople | Out-Null
+            & $sign.FullName sign /fd SHA256 /sha1 $cert.Thumbprint $pkg
+            if ($LASTEXITCODE) { throw 'Test package signing failed' }
+            Add-AppxPackage -Path $pkg
+            $app = Get-AppxPackage -Name 'UnsocialNetwork.PackagingTest'
+            if (!$app -or $app.Status -ne 'Ok') { throw 'Package registration failed' }
+            $id = $app.PackageFamilyName + '!UnsocialNetwork'
+            if (!(Get-StartApps | Where-Object AppID -eq $id)) { throw 'Missing Start menu entry' }
+            $env:UNSOCIAL_TEST_EXECUTABLE = Join-Path $app.InstallLocation 'Unsocial Network/Unsocial Network.exe'
+            npm run test:desktop
+            if ($LASTEXITCODE) { throw 'Installed desktop tests failed' }
+          } finally {
+            Get-AppxPackage -Name 'UnsocialNetwork.PackagingTest' | Remove-AppxPackage
+            Remove-Item -LiteralPath ("Cert:\LocalMachine\TrustedPeople\" + $cert.Thumbprint) -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $cert.PSPath -DeleteKey
+          }
+          if (Get-AppxPackage -Name 'UnsocialNetwork.PackagingTest') { throw 'Uninstall failed' }
+      - name: Build the unsigned package for Microsoft certification
+        if: github.event_name == 'workflow_dispatch' && inputs.submission
+        env:
+          STORE_IDENTITY_NAME: ${{ vars.STORE_IDENTITY_NAME }}
+          STORE_PUBLISHER: ${{ vars.STORE_PUBLISHER }}
+          STORE_PUBLISHER_DISPLAY_NAME: ${{ vars.STORE_PUBLISHER_DISPLAY_NAME }}
+        run: |
+          ./packaging/windows/store/build.ps1 -IdentityName $env:STORE_IDENTITY_NAME -Publisher $env:STORE_PUBLISHER -PublisherDisplayName $env:STORE_PUBLISHER_DISPLAY_NAME
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch' && inputs.submission
+        with:
+          name: windows-store-submission
+          path: dist/*-Store.msix
+          if-no-files-found: error
+          compression-level: 0

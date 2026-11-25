@@ -11,6 +11,8 @@ if (!/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(version)) throw Error("Invalid package 
 const out = path.join("build", "download-site");
 const tag = "v" + version;
 const repository = values.repository;
+const storeId = process.env.WINDOWS_STORE_PRODUCT_ID?.trim();
+if (storeId && !/^[A-Z0-9]{12}$/.test(storeId)) throw Error("Invalid Microsoft Store product ID");
 let remoteAssets, source, notes, downloadBase;
 if (values["release-json"] || repository) {
   if (!values["release-json"] || !/^[\w.-]+\/[\w.-]+$/.test(repository ?? "")) throw Error("Supply a release JSON file and its GitHub owner/repository");
@@ -47,7 +49,8 @@ if (remoteAssets) {
 const systems = [
   {
     id: "windows", title: "Windows",
-    instruction: "Open the downloaded setup file and choose Install. You can then open Unsocial Network from Start.",
+    instruction: storeId ? "Select Get in Microsoft Store, then open Unsocial Network from Start." :
+      "Open the downloaded setup file and choose Install. This installer is unsigned and Windows may show a SmartScreen warning.",
     builds: [{ suffix: "Windows-x64-Setup.exe", label: "Download for Windows", detail: "Intel / AMD 64-bit · EXE installer" }],
   },
   {
@@ -81,7 +84,9 @@ async function binaryLink(build) {
 
 const panels = [];
 for (const system of systems) {
-  const links = await Promise.all(system.builds.map(binaryLink));
+  const links = system.id === "windows" && storeId
+    ? ['<a class="button" href="https://apps.microsoft.com/detail/' + storeId + '">Get from Microsoft Store</a>']
+    : await Promise.all(system.builds.map(binaryLink));
   panels.push(`<section class="platform" id="${system.id}"><h3>${system.title}</h3><p>${system.instruction}</p><div class="binaries">${links.join("\n")}</div></section>`);
 }
 const replacements = { version, source, sourceLabel: remoteAssets ? "GitHub" : "Readme", notes, checksums, panels: panels.join("\n") };

@@ -40,6 +40,8 @@ jobs:
           test "$code" = 200
           echo 'ready=true' >> "$GITHUB_OUTPUT"
       - if: steps.release.outputs.ready == 'true'
+        env:
+          WINDOWS_STORE_PRODUCT_ID: ${{ vars.WINDOWS_STORE_PRODUCT_ID }}
         run: node scripts/build-site.mjs --release-json build/release.json --repository "$GITHUB_REPOSITORY"
       - uses: actions/upload-pages-artifact@v4
         if: steps.release.outputs.ready == 'true'
