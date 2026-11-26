@@ -156,8 +156,29 @@ header em {
   margin: 0 13px;
   color: #8b9185;
 }
+#workspace {
+  border: 0;
+  padding: 4px 0;
+  background: transparent;
+  font: inherit;
+  font-weight: bold;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 header time {
   letter-spacing: 1px;
+  flex-shrink: 0;
+}
+header > span {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin-right: 12px;
+}
+#crumb {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .view {
   width: min(1240px, 100%);

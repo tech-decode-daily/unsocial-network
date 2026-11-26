@@ -31,6 +31,8 @@ By default a room runs on its creator's desktop for 24 hours from creation. Part
 
 Keep the hosting app running. Its directory button closes the room view while the host service continues. A host restart on the same network address and saved port restores unexpired rooms and files. A standalone HTTPS server supports internet rooms and operates independently of the creator. See DEPLOYMENT.md in the source tree. No hosted service subscription is included.
 
+**Switch rooms.** Select **Workspace** at the top or **Rooms** in the sidebar to see the rooms you have joined or created. Open another room or join one with an invitation. You stay online in each connected room, background transfers continue, and each room keeps its own chat draft while the app is open. **Leave** removes you from the room you are viewing.
+
 Downloads go to the Unsocial Network subfolder of Downloads by default. Settings lets you choose a different folder and change transfer concurrency. The final publication step requires a filesystem supporting hard links. Retry uses the server's confirmed upload offset or the local partial download. A source file must remain available and unchanged. Credentials and queue metadata use the OS credential service when available. Memory-only sessions show their storage status in Settings.
 
 ## Development

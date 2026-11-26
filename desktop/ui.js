@@ -5,12 +5,14 @@ let state,
   page = "rooms",
   modalType = "",
   toastTimer,
-  draftKey = "",
-  lastDraft = "",
   lastRoom = "",
   lastChat = "",
+  directorySignature = "",
   wiredSignature = "",
-  modalAddress = "";
+  modalAddress = "",
+  modalRoom;
+const drafts = new Map();
+const pendingMessages = new Set();
 function el(tag, text, cls) {
   const node = document.createElement(tag);
   if (text !== undefined) node.textContent = text;
@@ -85,16 +87,23 @@ function nav(p) {
     b.setAttribute("aria-current", b.dataset.nav === p ? "page" : "false");
   }
   $("crumb").textContent = {
-    rooms: "Rooms",
+    rooms: state?.room?.Name || "Rooms",
     ethernet: "Ethernet",
     transfers: "Transfers",
     activity: "Activity",
     settings: "Settings",
   }[p];
 }
-document
-  .querySelectorAll("[data-nav]")
-  .forEach((b) => (b.onclick = () => nav(b.dataset.nav)));
+async function showDirectory() {
+  await api.directory();
+  render(await api.state());
+  nav("rooms");
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("[data-nav]").forEach((b) => {
+  b.onclick = () =>
+    b.dataset.nav === "rooms" ? run(showDirectory) : nav(b.dataset.nav);
+});
 function jobList(jobs) {
   if (!jobs.length)
     return [
@@ -177,6 +186,7 @@ function render(s) {
   $("host-stop").disabled = s.hostStopping;
   $("directory").hidden = !!r;
   $("room").hidden = !r;
+  if (page === "rooms") $("crumb").textContent = r?.Name || "Rooms";
   $("version").textContent = "Version " + s.version;
   $("footer-state").textContent = r
     ? s.connection
@@ -185,29 +195,40 @@ function render(s) {
       : "Loopback only";
   $("room-count").textContent =
     s.rooms.length + (s.rooms.length === 1 ? " ROOM" : " ROOMS");
-  $("recents").replaceChildren(
-    ...(s.rooms.length
-      ? s.rooms.map((x) => {
-          const expired = x.expires * 1000 <= Date.now();
-          return row(
-            x.name,
-            (x.hosted ? "Hosted here" : "Remote room") +
-              " · " +
-              (expired
-                ? "Expired"
-                : "Expires " + new Date(x.expires * 1000).toLocaleString()),
-            expired
-              ? button("Remove", () => api.forget(x.id))
-              : button("Open room", () => api.enter(x.id)),
-          );
-        })
-      : [
-          empty(
-            "No rooms yet",
-            "Create a room or join one with an invitation.",
-          ),
-        ]),
+  const directoryKey = JSON.stringify(
+    s.rooms.map((room) => [room, room.expires * 1000 <= Date.now()]),
   );
+  if (directorySignature !== directoryKey) {
+    directorySignature = directoryKey;
+    for (const id of drafts.keys()) {
+      if (!s.rooms.some((room) => room.id === id)) drafts.delete(id);
+    }
+    $("recents").replaceChildren(
+      ...(s.rooms.length
+        ? s.rooms.map((x) => {
+            const expired = x.expires * 1000 <= Date.now();
+            return row(
+              x.name,
+              (x.hosted ? "Hosted here" : "Remote room") +
+                " · " +
+                (expired
+                  ? "Expired"
+                  : x.connection +
+                    " · Expires " +
+                    new Date(x.expires * 1000).toLocaleString()),
+              expired
+                ? button("Remove", () => api.forget(x.id))
+                : button("Open room", () => api.enter(x.id)),
+            );
+          })
+        : [
+            empty(
+              "No rooms yet",
+              "Create a room or join one with an invitation.",
+            ),
+          ]),
+    );
+  }
   $("job-count").textContent =
     s.jobs.filter(
       (j) => !["complete", "cancelled", "failed", "paused"].includes(j.status),
@@ -233,12 +254,12 @@ function render(s) {
     return;
   }
   if (lastRoom !== r.Room) {
-    $("chat-text").value = "";
-    draftKey = "";
+    $("chat-text").value = drafts.get(r.Room)?.text || "";
     lastRoom = r.Room;
   }
   $("room-name").textContent = r.Name;
   $("room-id").textContent = "ID " + r.Room;
+  $("chat-form").querySelector("button").disabled = pendingMessages.has(r.Room);
   $("status").textContent = s.connection;
   $("wired-status").hidden = !s.wired;
   $("wired-status").textContent = s.wired ? "Ethernet · " + s.wired : "";
@@ -263,7 +284,7 @@ function render(s) {
               group = el("span", undefined, "copy-group");
             const words = el("span", m.Text, "message-text");
             const copy = button("Copy", async () => {
-              await api.copyMessage(m.Seq);
+              await api.copyMessage(m.Seq, r.Room);
               notify("Message copied.");
             });
             copy.className = "message-copy";
@@ -303,7 +324,7 @@ function render(s) {
       row(
         f.Name,
         size(f.Size) + " · " + f.Sender + " · " + time(f.Time),
-        button("Download", () => api.receive(f.ID)),
+        button("Download", () => api.receive(f.ID, r.Room)),
       ),
     ),
   );
@@ -331,6 +352,7 @@ function field(name, label, type = "text", value = "") {
 function openModal(type, address = "") {
   modalType = type;
   modalAddress = address;
+  modalRoom = state.room?.Room;
   $("form-error").textContent = "";
   const f = $("fields");
   f.replaceChildren();
@@ -397,7 +419,7 @@ function openModal(type, address = "") {
     f.append(
       el(
         "p",
-        "Leaving revokes this membership and cancels its unfinished transfers. Use Room directory to return later with your membership.",
+        "Leaving removes you from this room and cancels its unfinished transfers. To stay joined, select Workspace.",
       ),
     );
   if (address) f.append(el("p", "Ethernet adapter · " + address));
@@ -417,7 +439,8 @@ $("modal-form").onsubmit = async (e) => {
   const d = Object.fromEntries(new FormData(e.target));
   if (modalAddress) d.wired = modalAddress;
   try {
-    await api[modalType](d);
+    if (modalType === "leave") await api.leave(modalRoom);
+    else await api[modalType](d);
     if (modalType === "create" || modalType === "join") nav("rooms");
     $("modal").close();
     render(await api.state());
@@ -427,22 +450,22 @@ $("modal-form").onsubmit = async (e) => {
     b.disabled = false;
   }
 };
-$("back").onclick = () => run(() => api.directory());
+$("back").onclick = $("workspace").onclick = () => run(showDirectory);
 $("leave").onclick = () => openModal("leave");
 $("copy").onclick = () =>
   run(async () => {
-    await api.invite();
+    await api.invite(state.room.Room);
     notify("Invitation copied. Share it privately.");
   });
-$("pick").onclick = () => run(() => api.send());
+$("pick").onclick = () => run(() => api.send(state.room.Room));
 $("folder").onclick = () => run(() => api.folder());
 $("parallel").onchange = () =>
   run(() => api.parallel(Number($("parallel").value)));
 $("host-start").onclick = () => run(() => api.startHost());
 $("host-stop").onclick = () => openModal("stopHost");
-$("site-share").onclick = () => run(() => api.shareSite());
-$("site-stop").onclick = () => run(() => api.stopSite());
-$("site-open").onclick = () => run(() => api.openSite());
+$("site-share").onclick = () => run(() => api.shareSite(state.room.Room));
+$("site-stop").onclick = () => run(() => api.stopSite(state.room.Room));
+$("site-open").onclick = () => run(() => api.openSite(state.room.Room));
 function applyTheme(value) {
   const select = $("theme");
   select.value = value;
@@ -455,26 +478,35 @@ $("theme").onchange = () => {
   applyTheme($("theme").value);
   localStorage.setItem("desktop-theme", $("theme").value);
 };
+$("chat-text").oninput = (e) => {
+  if (state.room) drafts.set(state.room.Room, { text: e.target.value });
+};
 $("chat-form").onsubmit = async (e) => {
   e.preventDefault();
   const input = $("chat-text"),
     text = input.value.trim();
-  if (!text) return;
-  if (lastDraft !== text || !draftKey) {
-    draftKey = crypto.randomUUID().replaceAll("-", "");
-    lastDraft = text;
-  }
+  const room = state.room?.Room;
+  if (!text || !room || pendingMessages.has(room)) return;
+  const draft = drafts.get(room) || { text: input.value };
+  draft.key ??= crypto.randomUUID().replaceAll("-", "");
+  drafts.set(room, draft);
   const b = e.target.querySelector("button");
+  pendingMessages.add(room);
   b.disabled = true;
   try {
-    await api.chat(text, draftKey);
-    if (input.value.trim() === text) input.value = "";
-    draftKey = "";
+    await api.chat(text, draft.key, room);
+    if (drafts.get(room) === draft) {
+      drafts.delete(room);
+      if (state.room?.Room === room) input.value = "";
+    }
   } catch (err) {
     notify(cleanError(err));
   } finally {
-    b.disabled = false;
-    input.focus();
+    pendingMessages.delete(room);
+    if (state.room?.Room === room) {
+      b.disabled = false;
+      if (page === "rooms") input.focus();
+    }
   }
 };
 for (const name of ["dragover", "drop"])
@@ -488,7 +520,7 @@ drop.ondragleave = () => drop.classList.remove("over");
 drop.ondrop = (e) => {
   e.preventDefault();
   drop.classList.remove("over");
-  run(() => api.drop(Array.from(e.dataTransfer.files)));
+  run(() => api.drop(Array.from(e.dataTransfer.files), state.room.Room));
 };
 function drawGlobe() {
   const c = $("globe"),

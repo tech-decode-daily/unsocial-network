@@ -38,9 +38,17 @@ async function launch(name) {
   await w.getByRole("heading", { name: "Room directory" }).waitFor();
   return { app, w };
 }
+async function openSavedRoom(w, name) {
+  await w
+    .locator("#recents .row")
+    .filter({ has: w.getByText(name, { exact: true }) })
+    .getByRole("button", { name: "Open room" })
+    .click();
+  await w.getByRole("heading", { name, exact: true }).waitFor();
+}
 try {
-  const h = await launch("host"),
-    g = await launch("guest");
+  const h = await launch("host");
+  let g = await launch("guest");
   await h.w.locator("[data-nav=ethernet]").click();
   await h.w.getByRole("heading", { name: "Wired adapters" }).waitFor();
   await h.w.waitForFunction(
@@ -187,6 +195,7 @@ try {
   await g.w.locator("[data-nav=settings]").click();
   await g.w.locator("#folder").click();
   await g.w.locator("[data-nav=rooms]").click();
+  await openSavedRoom(g.w, "Night shift");
   await h.w.locator("#pick").click();
   await g.w.locator("#files button").first().click();
   await g.w.locator("#room-jobs").getByText("Show in folder").waitFor();
@@ -195,6 +204,94 @@ try {
     await fs.readFile(source, "utf8"),
   );
   await g.w.screenshot({ path: path.join(screens, "room.png") });
+  await h.w.locator("#chat-text").fill("Draft for Night shift");
+  await h.w.getByRole("button", { name: "Workspace", exact: true }).click();
+  await h.w.getByRole("heading", { name: "Room directory" }).waitFor();
+  await h.w.getByRole("button", { name: "Create room" }).click();
+  await h.w.getByLabel("Room name").fill("Design review");
+  await h.w.locator("#submit").click();
+  await h.w.getByRole("heading", { name: "Design review" }).waitFor();
+  await h.w.waitForFunction(async () => {
+    const { rooms } = await window.network.state();
+    return (
+      rooms.length === 2 && rooms.every((r) => r.connection === "Connected")
+    );
+  });
+  assert.equal(await h.w.locator("#chat-text").inputValue(), "");
+  await h.w.locator("#copy").click();
+  const secondInvite = await h.app.evaluate(() => globalThis.testInvitation);
+  await g.w
+    .locator("#members .row")
+    .filter({ hasText: "Ada" })
+    .getByText("Online")
+    .waitFor();
+  await g.w.locator("#chat-text").fill("Update for Night shift only");
+  await g.w.locator("#chat-form button").click();
+  await g.w
+    .locator("#messages")
+    .getByText("Update for Night shift only")
+    .waitFor();
+  await g.w.locator("#back").click();
+  await g.w.getByRole("button", { name: "Join room" }).click();
+  await g.w.getByLabel("Room invitation").fill(secondInvite);
+  await g.w.locator("#submit").click();
+  await g.w.getByRole("heading", { name: "Design review" }).waitFor();
+  await h.w
+    .locator("#members .row")
+    .filter({ hasText: "Lin" })
+    .getByText("Online")
+    .waitFor();
+  await h.w.locator("#chat-text").fill("Design review only");
+  await h.w.locator("#chat-form button").click();
+  await g.w.locator("#messages").getByText("Design review only").waitFor();
+  assert.equal(
+    await g.w
+      .locator("#messages")
+      .getByText("Update for Night shift only")
+      .count(),
+    0,
+  );
+  assert.equal(await g.w.locator("#files button").count(), 0);
+  await h.w.locator("#leave").click();
+  await h.w.locator("#submit").click();
+  await h.w.getByRole("heading", { name: "Room directory" }).waitFor();
+  assert.equal(await h.w.locator("#recents .row").count(), 1);
+  await openSavedRoom(h.w, "Night shift");
+  await h.w
+    .locator("#messages")
+    .getByText("Update for Night shift only")
+    .waitFor();
+  assert.equal(
+    await h.w.locator("#chat-text").inputValue(),
+    "Draft for Night shift",
+  );
+  await h.w
+    .locator("#members .row")
+    .filter({ hasText: "Lin" })
+    .getByText("Online")
+    .waitFor();
+  assert.equal(
+    await h.w.locator("#messages").getByText("Design review only").count(),
+    0,
+  );
+  await g.w.locator("[data-nav=settings]").click();
+  await g.w.locator("#workspace").click();
+  await g.w.getByRole("heading", { name: "Room directory" }).waitFor();
+  assert.equal(await g.w.locator("#recents .row").count(), 2);
+  if (await g.w.evaluate(async () => (await window.network.state()).secure)) {
+    await g.app.close();
+    apps.splice(apps.indexOf(g.app), 1);
+    g = await launch("guest");
+    await g.w.waitForFunction(async () => {
+      const { room, rooms } = await window.network.state();
+      return (
+        !room &&
+        rooms.length === 2 &&
+        rooms.every((r) => r.connection === "Connected")
+      );
+    });
+  }
+  await openSavedRoom(g.w, "Night shift");
   await h.w.locator("#leave").click();
   await h.w.locator("#submit").click();
   await h.w.getByRole("heading", { name: "Room directory" }).waitFor();
@@ -213,6 +310,11 @@ try {
     .locator("#status")
     .getByText("Connected", { exact: true })
     .waitFor();
+  await g.w.waitForFunction(async () =>
+    (await window.network.state()).rooms.every(
+      (r) => r.connection === "Connected",
+    ),
+  );
   await g.w
     .getByLabel("Message the room")
     .fill("Back after the host restarted.");
@@ -224,9 +326,11 @@ try {
   await g.w.locator("#leave").click();
   await g.w.locator("#submit").click();
   await g.w.getByRole("heading", { name: "Room directory" }).waitFor();
+  await openSavedRoom(g.w, "Design review");
+  await g.w.locator("#messages").getByText("Design review only").waitFor();
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: two desktops, server controls, themes, copy hover, private website, verified file, host restart and reconnect. Transport: " +
+    "PASS: simultaneous room presence, Workspace navigation, isolated messages, files and drafts, independent leave, verified transfer and host reconnect. Transport: " +
       (wire ? "wired " + wire : "loopback") +
       ".",
   );

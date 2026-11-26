@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- Stay connected to multiple rooms at once. Select **Workspace** or **Rooms** to see your joined rooms and switch between them. Each room keeps its own chat, unsent draft, files, and connection status.
+
 ## 0.1.3 desktop release candidate
 
 - Create and join encrypted chat and file rooms through a selected Ethernet adapter, including direct IPv4 cable connections.

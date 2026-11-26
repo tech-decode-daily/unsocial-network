@@ -47,20 +47,14 @@ function start() {
     ethernetTimer,
     ethernetPorts = null,
     ethernetError = false,
-    siteWindow,
     active,
-    socket,
-    reconnect,
-    attempt = 0,
     notifyTimer,
     quitting = false,
     shut = false,
     switching = false;
-  let connection = "Offline",
-    roomView = null,
-    secure = false;
+  let secure = false;
   const activity = [],
-    streams = new Map();
+    sessions = new Map();
   let data = {
     rooms: [],
     jobs: [],
@@ -120,8 +114,8 @@ function start() {
   function state() {
     return {
       version: app.getVersion(),
-      connection,
-      room: roomView,
+      connection: active?.connection ?? "Offline",
+      room: active?.view ?? null,
       member: active?.Member,
       display: data.display,
       secure,
@@ -133,6 +127,7 @@ function start() {
         expires: r.Expires,
         hosted: r.hosted,
         origin: r.origin,
+        connection: sessions.get(r.Room)?.connection ?? "Offline",
       })),
       jobs: data.jobs.map(publicJob),
       activity,
@@ -153,102 +148,129 @@ function start() {
     }, 75);
   }
   function session(id) {
+    if (sessions.has(id)) return sessions.get(id);
     const m = data.rooms.find((r) => r.Room === id);
-    if (!m) return;
-    let conn = streams.get(id);
-    if (!conn) {
-      conn = new RoomConnection(m, m.Token);
-      streams.set(id, conn);
-    }
-    return { ...m, conn };
+    if (!m || m.Expires * 1000 <= Date.now() || quitting) return;
+    const room = {
+      ...m,
+      conn: new RoomConnection(m, m.Token),
+      connection: "Connecting",
+      attempt: 0,
+      socket: null,
+      reconnect: null,
+      siteWindow: null,
+      view: {
+        Room: id,
+        Name: m.Name,
+        Expires: m.Expires,
+        Cursor: 0,
+        Members: [],
+        Files: [],
+        Events: [],
+      },
+    };
+    sessions.set(id, room);
+    loadRoom(room);
+    return room;
   }
-  function detach() {
-    if (siteWindow && !siteWindow.isDestroyed()) siteWindow.destroy();
-    siteWindow = null;
-    clearTimeout(reconnect);
-    if (socket) {
-      socket.removeAllListeners();
-      socket.on("error", () => {});
-      socket.terminate();
-      socket = null;
+  function closeSession(id) {
+    const room = sessions.get(id);
+    if (!room) return;
+    sessions.delete(id);
+    if (active === room) active = null;
+    if (room.siteWindow && !room.siteWindow.isDestroyed())
+      room.siteWindow.destroy();
+    clearTimeout(room.reconnect);
+    if (room.socket) {
+      room.socket.removeAllListeners();
+      room.socket.on("error", () => {});
+      room.socket.terminate();
     }
-    active = null;
-    roomView = null;
-    connection = "Offline";
-    attempt = 0;
+    room.conn.close();
   }
-  async function loadRoom(id) {
-    if (!active || active.Room !== id) return;
-    const current = active;
+  function isLive(room) {
+    return !quitting && sessions.get(room.Room) === room;
+  }
+  async function loadRoom(current) {
+    if (!isLive(current)) return;
     try {
       const snap = await current.conn.request(
         "GET",
-        "/rooms/" + id + "/state",
+        "/rooms/" + current.Room + "/state",
         { timeout: 14000 },
       );
-      if (current !== active) return;
-      if (attempt && roomView.Cursor) {
-        snap.Cursor = roomView.Cursor;
-        snap.Events = roomView.Events;
+      if (!isLive(current)) return;
+      if (current.attempt && current.view.Cursor) {
+        snap.Cursor = current.view.Cursor;
+        snap.Events = current.view.Events;
       }
-      roomView = snap;
+      current.view = snap;
       listen(current);
     } catch (e) {
-      if (current !== active) return;
       schedule(current, e.message, e.status);
     }
     notify();
   }
   function schedule(current, message, status) {
-    if (current !== active || quitting) return;
-    if ([403, 404, 410].includes(status)) {
-      connection = "Unavailable";
-      log(message);
+    if (!isLive(current)) return;
+    if (
+      [403, 404, 410].includes(status) ||
+      current.Expires * 1000 <= Date.now()
+    ) {
+      current.connection = "Unavailable";
+      log(current.Name + ": " + message);
       return;
     }
-    connection = "Reconnecting";
-    if (!attempt) log("Room connection interrupted. Reconnecting.");
-    clearTimeout(reconnect);
-    reconnect = setTimeout(
-      () => loadRoom(current.Room),
-      Math.min(15000, 600 * 2 ** Math.min(attempt++, 5)) + Math.random() * 350,
+    current.connection = "Reconnecting";
+    if (!current.attempt) log("Reconnecting to " + current.Name + ".");
+    clearTimeout(current.reconnect);
+    current.reconnect = setTimeout(
+      () => loadRoom(current),
+      Math.min(15000, 600 * 2 ** Math.min(current.attempt++, 5)) +
+        Math.random() * 350,
     );
     notify();
   }
   function listen(current) {
+    const roomView = current.view;
     const sock = current.conn.socket(
       "/rooms/" + current.Room + "/events?after=" + roomView.Cursor,
     );
-    socket = sock;
+    current.socket = sock;
     sock.on("open", () => {
-      if (current !== active) return;
-      connection = "Connected";
+      if (!isLive(current)) return;
+      current.connection = "Connected";
       log(
-        attempt
-          ? "Room connection restored."
+        current.attempt
+          ? "Reconnected to " + current.Name + "."
           : "Connected to " + current.Name + ".",
       );
-      attempt = 0;
+      current.attempt = 0;
       queue.pump();
     });
     sock.on("message", (raw) => {
-      if (current !== active) return;
+      if (!isLive(current)) return;
       try {
         const frame = JSON.parse(raw);
         roomView.Members = frame.Members;
         roomView.Site = !!frame.Site;
-        if (!roomView.Site && siteWindow && !siteWindow.isDestroyed())
-          siteWindow.destroy();
+        if (
+          !roomView.Site &&
+          current.siteWindow &&
+          !current.siteWindow.isDestroyed()
+        )
+          current.siteWindow.destroy();
         for (const ev of frame.Events) {
           if (ev.Seq <= roomView.Cursor) continue;
           roomView.Events.push(ev);
           if (ev.Kind === "file") {
-            log(ev.Sender + " shared " + ev.Text + ".");
+            log(current.Name + ": " + ev.Sender + " shared " + ev.Text + ".");
             current.conn
               .request("GET", "/rooms/" + current.Room + "/files/" + ev.File)
               .then((f) => {
                 if (
-                  current === active &&
+                  isLive(current) &&
+                  current.view === roomView &&
                   !roomView.Files.some((x) => x.ID === f.ID)
                 ) {
                   roomView.Files.push(f);
@@ -260,7 +282,9 @@ function start() {
           if (ev.Kind === "join" || ev.Kind === "leave")
             log(
               ev.Sender +
-                (ev.Kind === "join" ? " joined the room." : " left the room."),
+                (ev.Kind === "join" ? " joined " : " left ") +
+                current.Name +
+                ".",
             );
         }
         roomView.Events = roomView.Events.slice(-300);
@@ -272,8 +296,8 @@ function start() {
     });
     sock.on("error", () => {});
     sock.on("close", (code, reason) => {
-      if (sock !== socket) return;
-      socket = null;
+      if (sock !== current.socket) return;
+      current.socket = null;
       schedule(
         current,
         reason.toString() || "Room connection closed.",
@@ -281,23 +305,15 @@ function start() {
       );
     });
   }
-  async function enter(id) {
+  function enter(id) {
     const next = session(id);
     if (!next) throw Error("Room is unavailable.");
-    detach();
     active = next;
-    roomView = {
-      Room: id,
-      Name: next.Name,
-      Members: [],
-      Files: [],
-      Events: [],
-      Expires: next.Expires,
-      Cursor: 0,
-    };
-    connection = "Connecting";
+    if (next.connection === "Unavailable" && next.Expires * 1000 > Date.now()) {
+      next.connection = "Connecting";
+      loadRoom(next);
+    }
     notify();
-    await loadRoom(id);
   }
   async function host() {
     if (stopping)
@@ -456,7 +472,7 @@ function start() {
       });
       data.display = display;
       save();
-      await enter(result.Room);
+      enter(result.Room);
       log((join ? "Joined " : "Created ") + result.Name + ".");
     } finally {
       conn?.close();
@@ -486,13 +502,14 @@ function start() {
       case "stopSite":
         return setSite(active, "");
       case "openSite":
-        if (!active || !roomView?.Site)
+        if (!active?.view.Site)
           throw Error("No website is running in this room.");
-        if (siteWindow && !siteWindow.isDestroyed()) siteWindow.focus();
-        else siteWindow = openSite(active, win);
+        if (active.siteWindow && !active.siteWindow.isDestroyed())
+          active.siteWindow.focus();
+        else active.siteWindow = openSite(active, win);
         return;
       case "copyMessage": {
-        const message = roomView?.Events.find(
+        const message = active?.view.Events.find(
           (e) => e.Seq === payload && e.Kind === "chat",
         );
         if (!message) throw Error("Message is unavailable.");
@@ -510,14 +527,19 @@ function start() {
             r.Invite === inv.key &&
             r.ca === inv.ca,
         );
-        if (!known) return establish(payload, true);
+        if (!known) {
+          if (data.rooms.some((r) => r.Room === inv.room))
+            throw Error(
+              "This room is already in your directory. Open it there.",
+            );
+          return establish(payload, true);
+        }
         if (
           payload.wired &&
           known.localAddress !== wiredAddress(payload.wired)
         ) {
           known.localAddress = payload.wired;
-          streams.get(known.Room)?.close();
-          streams.delete(known.Room);
+          closeSession(known.Room);
           save();
         }
         return enter(known.Room);
@@ -525,7 +547,7 @@ function start() {
       case "enter":
         return enter(payload);
       case "directory":
-        detach();
+        active = null;
         notify();
         return;
       case "invite":
@@ -542,18 +564,16 @@ function start() {
       case "leave": {
         if (!active) return;
         const s = active;
-        if (s.hosted && roomView?.Site) await setSite(s, "");
+        if (s.hosted && s.view.Site) await setSite(s, "");
         await s.conn.request("POST", "/rooms/" + s.Room + "/leave");
         await queue.pauseRoom(s.Room);
-        detach();
         data.rooms = data.rooms.filter((x) => x.Room !== s.Room);
         for (const j of data.jobs.filter(
           (j) =>
             j.room === s.Room && !["cancelled", "complete"].includes(j.status),
         ))
           await queue.action(j.id, "cancel");
-        streams.get(s.Room)?.close();
-        streams.delete(s.Room);
+        closeSession(s.Room);
         save();
         log("Left " + s.Name + ".");
         return;
@@ -568,9 +588,7 @@ function start() {
         ))
           await queue.action(j.id, "cancel");
         data.rooms = data.rooms.filter((x) => x !== r);
-        if (active?.Room === r.Room) detach();
-        streams.get(r.Room)?.close();
-        streams.delete(r.Room);
+        closeSession(r.Room);
         save();
         notify();
         return;
@@ -581,7 +599,8 @@ function start() {
         const result = await dialog.showOpenDialog(win, {
           properties: ["openFile", "multiSelections"],
         });
-        if (!result.canceled) await queue.send(result.filePaths, room);
+        if (!result.canceled && sessions.has(room))
+          await queue.send(result.filePaths, room);
         return;
       }
       case "drop":
@@ -589,7 +608,7 @@ function start() {
           return queue.send(payload, active.Room);
         return;
       case "receive": {
-        const f = roomView?.Files.find((f) => f.ID === payload);
+        const f = active?.view.Files.find((f) => f.ID === payload);
         if (!f) throw Error("This file is unavailable.");
         queue.receive(f, active.Room);
         return;
@@ -679,13 +698,15 @@ function start() {
       wc.setWindowOpenHandler(() => ({ action: "deny" }));
       wc.on("will-navigate", (e) => e.preventDefault());
       wc.session.setPermissionRequestHandler((_w, _p, cb) => cb(false));
-      ipcMain.handle("command", async (e, name, value) => {
+      ipcMain.handle("command", async (e, name, value, roomId) => {
         if (
           e.sender !== wc ||
           e.senderFrame !== wc.mainFrame ||
           e.senderFrame.url !== pathToFileURL(home).href
         )
           throw Error("Invalid desktop context.");
+        if (roomId !== undefined && roomId !== active?.Room)
+          throw Error("The selected room has changed. Try again in the room.");
         return act(name, value);
       });
       win.once("ready-to-show", () => win.show());
@@ -701,6 +722,7 @@ function start() {
         fs.existsSync(path.join(profile, "host", "rooms.db"))
       )
         host().catch((e) => log(e.message));
+      for (const room of data.rooms) session(room.Room);
     })
     .catch((e) => {
       dialog.showErrorBox("Unsocial Network", e.message);
@@ -720,10 +742,9 @@ function start() {
     quitting = true;
     clearTimeout(ethernetTimer);
     (async () => {
-      detach();
       await queue?.shutdown();
       save();
-      for (const c of streams.values()) c.close();
+      for (const id of sessions.keys()) closeSession(id);
       if (hostProcess) {
         const child = hostProcess;
         const done = new Promise((r) => child.once("exit", r));
